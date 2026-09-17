@@ -1,4 +1,4 @@
-# SciFY — Science For You
+# SciFY — Science For You PNPC
 
 SciFY is a non-profit organisation based in Athens, Greece. We develop and
 release open-source software that puts technology at the service of society:
@@ -9,7 +9,6 @@ accessibility, education, and inclusion.
 - **Accessibility and assistive technology**: applications for people with visual impairments and other disabilities.
 - **Education and games**: educational games and tools used in schools and by families.
 - **Research and annotation tooling**: platforms that support research projects and data annotation.
-- **Shared engineering material**: reusable GitHub Actions workflows in [scify/.github](https://github.com/scify/.github) and guidelines in [scify-engineering-guidelines](https://github.com/scify/scify-engineering-guidelines).
 
 ## Contributing
 

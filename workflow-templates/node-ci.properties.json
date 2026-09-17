@@ -1,7 +1,0 @@
-{
-    "name": "SciFY Node CI",
-    "description": "Lint, type-check, test and build an npm project through the shared scify/.github workflow.",
-    "iconName": "octicon check-circle",
-    "categories": ["JavaScript", "TypeScript", "Continuous integration"],
-    "filePatterns": ["package.json$"]
-}

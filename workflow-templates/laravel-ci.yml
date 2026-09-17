@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   ci:
-    uses: scify/.github/.github/workflows/laravel-ci.yml@v1
+    uses: scify/.github/.github/workflows/laravel-ci.yml@v0.1
     with:
       php-version: '8.4'
       # frontend: false                  # repository without package.json

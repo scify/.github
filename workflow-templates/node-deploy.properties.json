@@ -1,7 +1,0 @@
-{
-    "name": "SciFY Node deploy",
-    "description": "Build a static frontend and upload it over SSH through the shared scify/.github workflow.",
-    "iconName": "octicon rocket",
-    "categories": ["JavaScript", "TypeScript", "Deployment"],
-    "filePatterns": ["package.json$"]
-}

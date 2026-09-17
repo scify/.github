@@ -12,7 +12,7 @@
 #
 #   jobs:
 #     deploy:
-#       uses: scify/.github/.github/workflows/node-deploy.yml@v1
+#       uses: scify/.github/.github/workflows/node-deploy.yml@v0.1
 #       with:
 #         environment: production
 #       secrets:

@@ -1,0 +1,78 @@
+# Dependabot configuration for a WordPress theme or plugin repository
+# (Composer + npm + GitHub Actions).
+# Copy this file to .github/dependabot.yml in the repository.
+#
+# WordPress specifics:
+#   - Dependabot does not know about WordPress core, or about plugins and themes
+#     installed through wp-admin. Only packages declared in composer.json
+#     (for example through wpackagist.org) and package.json are tracked.
+#   - Remove the composer block when the repository has no composer.json.
+#     An ecosystem without a manifest fails every scheduled run.
+#   - When package.json is not at the repository root, or there are several,
+#     replace `directory: /` with a list:
+#         directories:
+#             - /
+#             - /resources/app
+#
+# Strategy: security updates only. See dependabot-laravel.yml for the reasoning.
+version: 2
+
+updates:
+    - package-ecosystem: composer
+      directory: /
+      schedule:
+          interval: weekly
+          day: monday
+          time: '06:00'
+          timezone: Etc/UTC
+      open-pull-requests-limit: 0
+      versioning-strategy: increase
+      labels:
+          - dependencies
+          - php
+      commit-message:
+          prefix: 'chore(deps)'
+          prefix-development: 'chore(deps-dev)'
+      groups:
+          composer-security:
+              applies-to: security-updates
+              patterns:
+                  - '*'
+
+    - package-ecosystem: npm
+      directory: /
+      schedule:
+          interval: weekly
+          day: monday
+          time: '06:00'
+          timezone: Etc/UTC
+      open-pull-requests-limit: 0
+      versioning-strategy: increase
+      labels:
+          - dependencies
+          - javascript
+      commit-message:
+          prefix: 'chore(deps)'
+          prefix-development: 'chore(deps-dev)'
+      groups:
+          npm-security:
+              applies-to: security-updates
+              patterns:
+                  - '*'
+
+    - package-ecosystem: github-actions
+      directory: /
+      schedule:
+          interval: weekly
+          day: monday
+          time: '06:00'
+          timezone: Etc/UTC
+      open-pull-requests-limit: 0
+      labels:
+          - dependencies
+          - github-actions
+      groups:
+          github-actions-security:
+              applies-to: security-updates
+              patterns:
+                  - '*'

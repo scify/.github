@@ -1,40 +1,33 @@
-# Contributing to SciFY projects
+# Contributing
 
-Thank you for your interest in a SciFY project. This file is the organisation
-default. A repository can override it with its own `CONTRIBUTING.md`.
+This file is the SciFY organisation default. A repository can override it with
+its own `CONTRIBUTING.md`.
 
-## Before you start
+When you want to contribute a change, first discuss it with the owners of the
+repository. Open an issue, or contact us at <info@scify.org>. This avoids work
+on changes that the project cannot accept.
 
-- Read the repository `README.md` for setup instructions.
-- Search the open issues before you open a new one.
-- For a large change, open an issue first and describe the change.
+## Code of conduct
 
-## Development workflow
+We have a [code of conduct](CODE_OF_CONDUCT.md). Follow it in all your
+interactions with the project.
 
-1. Fork the repository, or create a branch if you are a SciFY member.
-2. Name the branch after the change, for example `feature/export-csv` or `fix/login-redirect`.
-3. Keep each pull request focused on one change.
-4. Run the project checks before you push. Most repositories provide `composer check` and `npm run check`, or a `composer test` script.
-5. Open a pull request against the default branch and fill in the template.
+## Pull request process
 
-## Commit messages
-
-- Use the imperative mood: "Add CSV export", not "Added CSV export".
-- Keep the subject line under 72 characters.
-- Explain why in the body when the reason is not obvious.
-
-## Code standards
-
-SciFY members: follow the [SciFY Engineering Guidelines](https://github.com/scify/scify-engineering-guidelines).
-That repository holds the shared linter and formatter configuration for PHP, JavaScript and TypeScript.
-
-External contributors: match the style of the surrounding code. The CI checks
-will tell you if something does not pass.
-
-## Continuous integration
-
-Reusable GitHub Actions workflows live in [scify/.github](https://github.com/scify/.github).
-See its `README.md` to add CI or deployment to a repository.
+1. Keep each pull request focused on one change. Open separate pull requests
+   for unrelated changes.
+2. Run the project's checks before you push. Most SciFY repositories provide
+   `composer check` and `npm run check`, or a `composer test` script. The
+   repository `README.md` documents the exact commands.
+3. Update the `README.md` when your change affects how the project is set up
+   or used. This includes new environment variables, configuration options,
+   and useful file locations.
+4. When the repository publishes versioned releases, increase the version
+   number in the example files and the `README.md` to the version this pull
+   request represents. We use [SemVer](https://semver.org/).
+5. You may merge the pull request once you have the sign-off of two other
+   developers. If you do not have permission to merge, ask the second reviewer
+   to merge it for you.
 
 ## Reporting security issues
 

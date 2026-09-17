@@ -1,0 +1,126 @@
+# Reusable, opt-in licence check for Composer and npm production dependencies.
+#
+# Do not call it from WordPress repositories: the WordPress ecosystem is GPL.
+#
+#   jobs:
+#     licenses:
+#       uses: scify/.github/.github/workflows/license-check.yml@v0.1
+#       with:
+#         allowed-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, CC0-1.0
+#
+# A package passes when at least one of its licences is in the allow-list.
+# For npm, an SPDX expression with AND needs every part allowed.
+name: License check
+
+on:
+  workflow_call:
+    inputs:
+      php-version:
+        description: PHP version used to install Composer packages.
+        type: string
+        default: '8.4'
+      node-version-file:
+        description: File that pins the Node.js version. Falls back to the runner default when missing.
+        type: string
+        default: .nvmrc
+      allowed-licenses:
+        description: Comma-separated SPDX identifiers that are allowed.
+        type: string
+        default: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, CC0-1.0, Unlicense, 0BSD, MPL-2.0, OFL-1.1, UFL-1.0, Python-2.0, BlueOak-1.0.0
+
+permissions:
+  contents: read
+
+jobs:
+  licenses:
+    name: Licence compliance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ALLOWED: ${{ inputs.allowed-licenses }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # ---- Composer -------------------------------------------------------
+      - name: Set up PHP
+        if: hashFiles('composer.lock') != ''
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ inputs.php-version }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Install Composer production packages
+        if: hashFiles('composer.lock') != ''
+        run: composer install --no-dev --no-scripts --no-interaction --prefer-dist --no-progress
+
+      - name: Check Composer licences
+        if: hashFiles('composer.lock') != ''
+        run: |
+          composer licenses --no-dev --format=json > composer-licenses.json
+          python3 - <<'PY'
+          import json, os
+          allowed = {x.strip() for x in os.environ["ALLOWED"].split(",") if x.strip()}
+          data = json.load(open("composer-licenses.json"))["dependencies"]
+          bad = {name: info["license"] for name, info in data.items()
+                 if not set(info["license"]) & allowed}
+          for name, lic in sorted(bad.items()):
+              print(f"::error::{name}: {', '.join(lic) or 'no licence declared'}")
+          print(f"{len(data)} Composer packages checked, {len(bad)} not allowed")
+          raise SystemExit(1 if bad else 0)
+          PY
+
+      # ---- npm ------------------------------------------------------------
+      - name: Set up Node.js
+        if: hashFiles('package-lock.json') != '' && hashFiles(inputs.node-version-file) != ''
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ${{ inputs.node-version-file }}
+          cache: npm
+
+      - name: Install npm production packages
+        if: hashFiles('package-lock.json') != ''
+        run: npm ci --omit=dev --ignore-scripts
+
+      - name: Check npm licences
+        if: hashFiles('package-lock.json') != ''
+        run: |
+          node - <<'JS'
+          const fs = require('fs');
+          const path = require('path');
+          const { execSync } = require('child_process');
+          const allowed = new Set(process.env.ALLOWED.split(',').map(s => s.trim()).filter(Boolean));
+
+          const dirs = execSync('npm ls --omit=dev --all --parseable', { encoding: 'utf8' })
+            .split('\n').filter(Boolean).filter(d => d !== process.cwd());
+
+          const licenceOf = (pkg) => {
+            if (typeof pkg.license === 'string') return pkg.license;
+            if (pkg.license && pkg.license.type) return pkg.license.type;
+            if (Array.isArray(pkg.licenses)) return pkg.licenses.map(l => l.type || l).join(' OR ');
+            return '';
+          };
+          const isAllowed = (expr) => {
+            if (!expr) return false;
+            const clean = expr.replace(/[()]/g, ' ');
+            if (/\bAND\b/.test(clean)) return clean.split(/\bAND\b/).every(p => isAllowed(p.trim()));
+            return clean.split(/\bOR\b/).some(p => allowed.has(p.trim()));
+          };
+
+          const bad = [];
+          for (const dir of dirs) {
+            const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
+            const lic = licenceOf(pkg);
+            if (!isAllowed(lic)) bad.push(`${pkg.name}@${pkg.version}: ${lic || 'no licence declared'}`);
+          }
+          bad.forEach(b => console.log(`::error::${b}`));
+          console.log(`${dirs.length} npm packages checked, ${bad.length} not allowed`);
+          process.exit(bad.length ? 1 : 0);
+          JS
+
+      - name: Nothing to check
+        if: hashFiles('composer.lock', 'package-lock.json') == ''
+        run: echo "No composer.lock or package-lock.json, skipping."

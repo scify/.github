@@ -4,7 +4,7 @@
 #
 #   jobs:
 #     ci:
-#       uses: scify/.github/.github/workflows/node-ci.yml@v1
+#       uses: scify/.github/.github/workflows/node-ci.yml@v0.1
 #
 # Scripts run only when package.json defines them:
 #   `check` or `lint`, `types` or `type-check`, `test`, then `build`.

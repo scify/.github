@@ -1,0 +1,100 @@
+# Scans dev tool config directories for signs of compromise.
+# Place AFTER checkout, runs independently of npm hardening.
+#
+# Usage:
+#
+#   steps:
+#     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+#     - uses: ./.github/actions/scan-dev-configs
+#
+# Checks:
+#   1. No executable script files in dev tool directories (always fails)
+#   2. No suspicious commands in config files (warns, fails with strict: true)
+#
+# Inputs:
+#   strict (optional, default: false)
+#     Fail on suspicious commands instead of warning. Editor task files and
+#     agent permission lists legitimately contain `npx` or `curl`, so the
+#     default only warns.
+
+name: Scan dev tool configs
+description: Checks .vscode, .claude, .cursor, and .idea directories for suspicious content
+
+inputs:
+    strict:
+        description: Fail on suspicious commands instead of warning
+        required: false
+        default: 'false'
+
+runs:
+    using: composite
+    steps:
+        - name: Detect dev tool directories
+          id: detect
+          shell: bash
+          run: |
+              dirs=""
+              for d in .vscode .claude .cursor .idea; do
+                [ -d "$d" ] && dirs="$dirs $d"
+              done
+
+              if [ -z "$dirs" ]; then
+                echo "No dev tool directories found in repository."
+                echo "found=false" >> "$GITHUB_OUTPUT"
+              else
+                echo "Scanning:$dirs"
+                echo "found=true" >> "$GITHUB_OUTPUT"
+                echo "dirs=$dirs" >> "$GITHUB_OUTPUT"
+              fi
+
+        - name: Check for executable script files
+          if: steps.detect.outputs.found == 'true'
+          shell: bash
+          env:
+              DIRS: ${{ steps.detect.outputs.dirs }}
+          run: |
+              # Dev tool directories should not contain executable scripts.
+              js_files=$(find $DIRS -type f \( -name "*.js" -o -name "*.mjs" -o -name "*.cjs" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" -o -name "*.mts" -o -name "*.cts" \) 2>/dev/null)
+
+              if [ -n "$js_files" ]; then
+                echo "::error::Executable script files found in dev tool directories:"
+                echo "$js_files" | while IFS= read -r file; do
+                  echo "::error::  $file"
+                done
+                exit 1
+              fi
+
+              echo "No executable script files found."
+
+        - name: Check for suspicious commands
+          if: steps.detect.outputs.found == 'true'
+          shell: bash
+          env:
+              DIRS: ${{ steps.detect.outputs.dirs }}
+              STRICT: ${{ inputs.strict }}
+          run: |
+              # Execution and network patterns that have no business in
+              # editor or tool configuration files. Every pattern is anchored
+              # on word boundaries so that "async " does not match "nc ".
+              suspicious='\b(curl|wget|Invoke-WebRequest|iwr|powershell|pwsh|certutil|base64|ncat|socat|npx)\b|\b(ba)?sh -c\b|\bchmod \+x\b|\bnc +\S|\bpython3? -c\b|\bnode -e\b|\beval\('
+              suspect_files=$(grep -Erl "$suspicious" $DIRS 2>/dev/null)
+
+              level=warning
+              [ "$STRICT" = "true" ] && level=error
+
+              if [ -n "$suspect_files" ]; then
+                echo "::${level}::Suspicious commands found in dev tool configs:"
+                echo "$suspect_files" | while IFS= read -r file; do
+                  echo "::${level}::  $file"
+                  grep -En "$suspicious" "$file" | while IFS= read -r match; do
+                    echo "::${level}::    $match"
+                  done
+                done
+                if [ "$STRICT" = "true" ]; then
+                  exit 1
+                fi
+                echo "Review the matches above. Set strict: true to fail on them."
+                exit 0
+              fi
+
+              echo "No suspicious commands found."

@@ -1,7 +1,0 @@
-{
-    "name": "SciFY Laravel deploy",
-    "description": "Build assets, upload over SSH and run the Laravel release steps through the shared scify/.github workflow.",
-    "iconName": "octicon rocket",
-    "categories": ["PHP", "Deployment"],
-    "filePatterns": ["composer.json$", "artisan$"]
-}

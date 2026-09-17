@@ -1,0 +1,155 @@
+# Reusable security workflow for SciFY repositories.
+#
+# Call it from a repository workflow:
+#
+#   on:
+#     pull_request:
+#     schedule:
+#       - cron: '0 11 * * 1'
+#   jobs:
+#     security:
+#       uses: scify/.github/.github/workflows/security.yml@v0.1
+#
+# Jobs, all independent:
+#   secrets        committed .env files, Gitleaks over the full git history
+#   dev-configs    .vscode/.claude/.cursor/.idea content (scan-dev-configs action)
+#   npm-hardening  .npmrc and lockfile checks (verify-npm-hardening action)
+#   audit          `composer audit` and `npm audit` against the lock files
+#
+# Each check runs only when the repository has the matching files, so the
+# same call works for Laravel, npm-only and PHP-only repositories.
+# Licence and OWASP checks are separate opt-in workflows:
+# license-check.yml and owasp-dependency-check.yml.
+name: Security
+
+on:
+  workflow_call:
+    inputs:
+      php-version:
+        description: PHP version used to run `composer audit`.
+        type: string
+        default: '8.4'
+      npm-audit-level:
+        description: Lowest npm advisory severity that fails the audit (low, moderate, high, critical).
+        type: string
+        default: high
+      strict-dev-configs:
+        description: Fail on suspicious commands in dev tool configs. Default only warns.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository with full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check for committed environment files
+        run: |
+          found=$(find . -type f -name '.env*' \
+            -not -path './vendor/*' -not -path './node_modules/*' -not -path './.git/*' \
+            -not -name '.env.example' -not -name '.env.*.example' \
+            -not -name '.env.testing' -not -name '.env.ci')
+          if [ -n "$found" ]; then
+            echo "::error::Environment files are committed to the repository:"
+            echo "$found"
+            exit 1
+          fi
+          echo "No environment files committed."
+
+      - name: Install Gitleaks
+        env:
+          VERSION: 8.30.1
+          SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          curl -sSfL -o gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz"
+          echo "${SHA256}  gitleaks.tar.gz" | sha256sum --check
+          tar -xzf gitleaks.tar.gz gitleaks
+          rm gitleaks.tar.gz
+
+      - name: Run Gitleaks
+        run: |
+          config=""
+          if [ -f .gitleaks.toml ]; then
+            config="--config .gitleaks.toml"
+            echo "Using repository .gitleaks.toml"
+          else
+            echo "No .gitleaks.toml, using the built-in rules"
+          fi
+          # shellcheck disable=SC2086
+          ./gitleaks git --redact --no-banner $config .
+
+  dev-configs:
+    name: Dev tool configs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Scan dev tool config directories
+        uses: scify/.github/.github/actions/scan-dev-configs@v0.1
+        with:
+          strict: ${{ inputs.strict-dev-configs }}
+
+  npm-hardening:
+    name: npm supply chain hardening
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Verify npm hardening
+        if: hashFiles('package.json') != ''
+        uses: scify/.github/.github/actions/verify-npm-hardening@v0.1
+
+      - name: No package.json
+        if: hashFiles('package.json') == ''
+        run: echo "No package.json, skipping."
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up PHP
+        if: hashFiles('composer.lock') != ''
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ inputs.php-version }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Composer audit
+        if: hashFiles('composer.lock') != ''
+        run: composer audit --format=table
+
+      - name: npm audit
+        if: hashFiles('package-lock.json') != ''
+        env:
+          LEVEL: ${{ inputs.npm-audit-level }}
+        run: npm audit --audit-level="$LEVEL"
+
+      - name: Nothing to audit
+        if: hashFiles('composer.lock', 'package-lock.json') == ''
+        run: echo "No composer.lock or package-lock.json, skipping."
