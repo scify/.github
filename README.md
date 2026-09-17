@@ -151,14 +151,26 @@ branch, the actions still come from `v1`. Move the tag after both are merged.
 
 ## Dependabot
 
-Copy the matching template to `.github/dependabot.yml` in the repository:
+Dependabot reads only the repository's own `.github/dependabot.yml`. There is
+no include mechanism, so the templates are copied once and then owned by that
+repository. Pick the matching template:
 
 - `templates/dependabot-laravel.yml` for Composer + npm + GitHub Actions
 - `templates/dependabot-node.yml` for npm + GitHub Actions
 - `templates/dependabot-wordpress.yml` for WordPress themes and plugins. Read its header: WordPress core and wp-admin plugins are not tracked.
 
-Both files configure **security updates only**. Enable "Dependabot security
-updates" in the repository's Security settings as well.
+From the target repository's root:
+
+```bash
+mkdir -p .github
+curl -sSfL https://raw.githubusercontent.com/scify/.github/v0.1/templates/dependabot-laravel.yml -o .github/dependabot.yml
+```
+
+Then enable "Dependabot security updates" in the repository's Security
+settings and commit the file.
+
+All three templates configure **security updates only**. A change to a
+template does not reach existing copies. Re-run the command to pick it up.
 
 ## Contributing to this repository
 
