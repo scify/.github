@@ -1,0 +1,117 @@
+# Reusable deployment workflow for static frontend builds (Vue, React, plain Vite)
+# on a SciFY server.
+#
+# What it does:
+#   1. Checks out the repository.
+#   2. Writes .env from the ENV_FILE secret (when the secret is set), so that
+#      Vite picks up VITE_* variables at build time.
+#   3. Runs `npm ci` and the build command.
+#   4. Uploads the build directory with rsync over SSH.
+#
+# Call it from a repository workflow:
+#
+#   jobs:
+#     deploy:
+#       uses: scify/.github/.github/workflows/node-deploy.yml@v1
+#       with:
+#         environment: production
+#       secrets:
+#         SSH_HOST: ${{ secrets.SSH_HOST }}
+#         SSH_PORT: ${{ secrets.SSH_PORT }}
+#         SSH_USER: ${{ secrets.SSH_USER }}
+#         SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+#         PROJECT_PATH: ${{ secrets.PROJECT_PATH }}
+#         ENV_FILE: ${{ secrets.ENV_FILE }}
+name: Node deploy
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: GitHub environment that holds the secrets, for example production or staging.
+        type: string
+        default: production
+      node-version-file:
+        description: File that pins the Node.js version.
+        type: string
+        default: .nvmrc
+      build-command:
+        description: Command that builds the project.
+        type: string
+        default: npm run build
+      build-directory:
+        description: Folder that holds the build output, relative to the repository root.
+        type: string
+        default: dist
+      delete-remote-files:
+        description: Remove files on the server that are not in the build output. Use with care.
+        type: boolean
+        default: false
+    secrets:
+      SSH_HOST:
+        description: Server hostname or IP address.
+        required: true
+      SSH_PORT:
+        description: SSH port. Defaults to 22.
+        required: false
+      SSH_USER:
+        description: Deploy user on the server.
+        required: true
+      SSH_PRIVATE_KEY:
+        description: Private key of the deploy user.
+        required: true
+      PROJECT_PATH:
+        description: Absolute path of the web root on the server.
+        required: true
+      ENV_FILE:
+        description: Full content of the .env file used at build time.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 15
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Write .env from the ENV_FILE secret
+        if: env.ENV_FILE != ''
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: printf '%s\n' "$ENV_FILE" > .env
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ${{ inputs.node-version-file }}
+          cache: npm
+
+      - name: Build
+        env:
+          BUILD_COMMAND: ${{ inputs.build-command }}
+        run: |
+          npm ci
+          bash -c "$BUILD_COMMAND"
+
+      - name: Upload build output
+        uses: easingthemes/ssh-deploy@2cc5b27bf3029d0455dd5e09fe02633904031447 # v6.0.3
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          REMOTE_HOST: ${{ secrets.SSH_HOST }}
+          REMOTE_USER: ${{ secrets.SSH_USER }}
+          REMOTE_PORT: ${{ secrets.SSH_PORT || '22' }}
+          SOURCE: ${{ inputs.build-directory }}/
+          TARGET: ${{ secrets.PROJECT_PATH }}/
+          ARGS: -rlgoDzvc -i${{ inputs.delete-remote-files && ' --delete' || '' }}
+          SSH_CMD_ARGS: -o IdentitiesOnly=yes -o StrictHostKeyChecking=no

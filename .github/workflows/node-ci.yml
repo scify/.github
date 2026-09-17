@@ -1,0 +1,80 @@
+# Reusable CI workflow for npm-only repositories (Vue, React, TypeScript SPAs).
+#
+# Call it from a repository workflow:
+#
+#   jobs:
+#     ci:
+#       uses: scify/.github/.github/workflows/node-ci.yml@v1
+#
+# Scripts run only when package.json defines them:
+#   `check` or `lint`, `types` or `type-check`, `test`, then `build`.
+name: Node CI
+
+on:
+  workflow_call:
+    inputs:
+      node-version-file:
+        description: File that pins the Node.js version (.nvmrc, or package.json with an engines field).
+        type: string
+        default: .nvmrc
+      node-version:
+        description: Explicit Node.js version. When set, it takes precedence over node-version-file.
+        type: string
+        default: ''
+      working-directory:
+        description: Folder that holds package.json, relative to the repository root.
+        type: string
+        default: .
+      build-command:
+        description: Command that builds the project.
+        type: string
+        default: npm run build
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Node checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+          node-version-file: ${{ inputs.node-version == '' && inputs.node-version-file || '' }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Lint, type-check and test
+        run: |
+          has_script() {
+            node -e "process.exit(require('./package.json').scripts?.['$1'] ? 0 : 1)"
+          }
+          if has_script check; then npm run check
+          elif has_script lint; then npm run lint
+          else echo "No check or lint script, skipping"; fi
+
+          if has_script types; then npm run types
+          elif has_script type-check; then npm run type-check
+          else echo "No types or type-check script, skipping"; fi
+
+          if has_script test; then npm run test
+          else echo "No test script, skipping"; fi
+
+      - name: Build
+        env:
+          BUILD_COMMAND: ${{ inputs.build-command }}
+        run: bash -c "$BUILD_COMMAND"

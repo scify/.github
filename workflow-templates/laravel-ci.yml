@@ -1,0 +1,20 @@
+# Continuous integration for a Laravel repository.
+# The logic lives in scify/.github. Change inputs here, not the steps.
+# Inputs: https://github.com/scify/.github/blob/main/.github/workflows/laravel-ci.yml
+name: CI
+
+on:
+  push:
+    branches: [$default-branch]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: scify/.github/.github/workflows/laravel-ci.yml@v1
+    with:
+      php-version: '8.4'
+      # frontend: false                  # repository without package.json
+      # build-frontend-for-tests: false  # tests do not need the Vite manifest

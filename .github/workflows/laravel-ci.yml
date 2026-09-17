@@ -1,0 +1,154 @@
+# Reusable CI workflow for Laravel repositories.
+#
+# Call it from a repository workflow:
+#
+#   jobs:
+#     ci:
+#       uses: scify/.github/.github/workflows/laravel-ci.yml@v1
+#       with:
+#         php-version: '8.4'
+#
+# Every tool runs only when the repository is configured for it:
+#   - Pint      when pint.json exists
+#   - PHPStan   when phpstan.neon or phpstan.neon.dist exists
+#   - Rector    when rector.php exists
+#   - Tests     always, through `php artisan test` (Pest or PHPUnit)
+#   - npm       `check` or `lint`, `types` or `type-check`, `test`, `build`
+#
+# The database for tests comes from the repository's phpunit.xml. The Laravel
+# default (sqlite in memory) needs no service container.
+name: Laravel CI
+
+on:
+  workflow_call:
+    inputs:
+      php-version:
+        description: PHP version installed on the runner.
+        type: string
+        default: '8.4'
+      php-extensions:
+        description: Comma-separated PHP extensions for shivammathur/setup-php.
+        type: string
+        default: mbstring, dom, fileinfo, intl, pdo_sqlite, sqlite3, gd, zip, bcmath
+      node-version-file:
+        description: File that pins the Node.js version (.nvmrc, or package.json with an engines field).
+        type: string
+        default: .nvmrc
+      frontend:
+        description: Run the npm checks job. Set to false for repositories without package.json.
+        type: boolean
+        default: true
+      build-frontend-for-tests:
+        description: Build assets before PHP tests. Needed when Blade views use @vite.
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  php:
+    name: PHP ${{ inputs.php-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ inputs.php-version }}
+          extensions: ${{ inputs.php-extensions }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-php${{ inputs.php-version }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-php${{ inputs.php-version }}-
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare environment file
+        run: |
+          if [ ! -f .env ] && [ -f .env.example ]; then
+            cp .env.example .env
+            php artisan key:generate --ansi
+          fi
+
+      - name: Pint
+        if: hashFiles('pint.json') != ''
+        run: vendor/bin/pint --test
+
+      - name: PHPStan
+        if: hashFiles('phpstan.neon', 'phpstan.neon.dist') != ''
+        run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G
+
+      - name: Rector (dry run)
+        if: hashFiles('rector.php') != ''
+        run: vendor/bin/rector --dry-run --no-progress-bar
+
+      - name: Set up Node.js
+        if: inputs.frontend && inputs.build-frontend-for-tests
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ${{ inputs.node-version-file }}
+          cache: npm
+
+      - name: Build frontend assets for tests
+        if: inputs.frontend && inputs.build-frontend-for-tests
+        run: |
+          npm ci
+          npm run build
+
+      - name: Tests
+        run: php artisan test
+
+  frontend:
+    name: Frontend checks
+    if: inputs.frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ${{ inputs.node-version-file }}
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Lint, type-check and test
+        run: |
+          has_script() {
+            node -e "process.exit(require('./package.json').scripts?.['$1'] ? 0 : 1)"
+          }
+          if has_script check; then npm run check
+          elif has_script lint; then npm run lint
+          else echo "No check or lint script, skipping"; fi
+
+          if has_script types; then npm run types
+          elif has_script type-check; then npm run type-check
+          else echo "No types or type-check script, skipping"; fi
+
+          if has_script test; then npm run test
+          else echo "No test script, skipping"; fi
+
+      - name: Build
+        run: npm run build

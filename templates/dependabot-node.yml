@@ -1,0 +1,45 @@
+# Dependabot configuration for an npm-only repository (npm + GitHub Actions).
+# Copy this file to .github/dependabot.yml in the repository.
+# If package.json is not at the repository root, change `directory` in the npm block.
+#
+# Strategy: security updates only. See dependabot-laravel.yml for the reasoning.
+version: 2
+
+updates:
+    - package-ecosystem: npm
+      directory: /
+      schedule:
+          interval: weekly
+          day: monday
+          time: '06:00'
+          timezone: Etc/UTC
+      open-pull-requests-limit: 0
+      versioning-strategy: increase
+      labels:
+          - dependencies
+          - javascript
+      commit-message:
+          prefix: 'chore(deps)'
+          prefix-development: 'chore(deps-dev)'
+      groups:
+          npm-security:
+              applies-to: security-updates
+              patterns:
+                  - '*'
+
+    - package-ecosystem: github-actions
+      directory: /
+      schedule:
+          interval: weekly
+          day: monday
+          time: '06:00'
+          timezone: Etc/UTC
+      open-pull-requests-limit: 0
+      labels:
+          - dependencies
+          - github-actions
+      groups:
+          github-actions-security:
+              applies-to: security-updates
+              patterns:
+                  - '*'

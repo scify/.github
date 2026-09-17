@@ -1,0 +1,7 @@
+{
+    "name": "SciFY Laravel CI",
+    "description": "Pint, PHPStan, Rector, tests and npm checks through the shared scify/.github workflow.",
+    "iconName": "octicon check-circle",
+    "categories": ["PHP", "Continuous integration"],
+    "filePatterns": ["composer.json$", "artisan$"]
+}

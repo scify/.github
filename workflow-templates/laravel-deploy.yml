@@ -1,0 +1,31 @@
+# Manual deployment of a Laravel application to the production server.
+# The logic lives in scify/.github. Change inputs here, not the steps.
+# Inputs and server requirements:
+# https://github.com/scify/.github/blob/main/.github/workflows/laravel-deploy.yml
+#
+# Create a GitHub environment named "production" with these secrets:
+#   SSH_HOST, SSH_PORT, SSH_USER, SSH_PRIVATE_KEY, PROJECT_PATH, ENV_FILE
+name: Deploy production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    uses: scify/.github/.github/workflows/laravel-deploy.yml@v1
+    with:
+      environment: production
+      # php-binary: /usr/bin/php8.4
+      # php-fpm-service: php8.4-fpm
+      # build-command: npm run build:ssr
+      # extra-exclude: clear-cache.sh,load-dummy-db.sh
+    secrets:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      PROJECT_PATH: ${{ secrets.PROJECT_PATH }}
+      ENV_FILE: ${{ secrets.ENV_FILE }}
