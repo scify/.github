@@ -1,9 +1,23 @@
-# Dependabot for this repository. Unlike the templates in templates/, this
-# enables version updates: the actions pinned here are inherited by every
-# caller, so they must stay current.
+# Dependabot configuration for this repository (GitHub Actions only).
+#
+# Strategy: version updates ON. This differs from the templates in templates/,
+# which are security-only, for one reason: this repository is the single place
+# where third-party actions are pinned by commit SHA, and every caller inherits
+# those pins through the release tag. A SHA pin never moves on its own, and
+# GitHub rarely publishes security advisories for actions. Version updates are
+# the only mechanism that moves a pin. Dependabot rewrites the SHA and the
+# trailing `# vX.Y.Z` comment together.
+#
+#   - All action bumps are grouped into one PR per week.
+#   - Self-references (`scify/.github/.github/actions/...@v0.x`) are ignored.
+#     They are bumped by hand when a new release is tagged, see README.md.
+#   - No `versioning-strategy`: actions have no manifest constraint.
+#   - No `prefix-development`: this ecosystem has no development dependencies.
 version: 2
 
 updates:
+    # Reads `uses:` lines in .github/workflows/*.yml. For this ecosystem `/`
+    # means .github/workflows, not the repository root.
     - package-ecosystem: github-actions
       directory: /
       schedule:
@@ -11,10 +25,15 @@ updates:
           day: monday
           time: '06:00'
           timezone: Etc/UTC
+      # Version updates on. One grouped PR at a time is enough.
       open-pull-requests-limit: 5
       labels:
           - dependencies
           - github-actions
+      commit-message:
+          prefix: 'chore(deps)'
+      ignore:
+          - dependency-name: 'scify/.github/*'
       groups:
           github-actions:
               patterns:
