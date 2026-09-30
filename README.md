@@ -23,7 +23,7 @@ deployment secrets, so they will live in a separate private repository.
 | --- | --- | --- |
 | `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `PULL_REQUEST_TEMPLATE.md`, `ISSUE_TEMPLATE/` | Default community health files | Automatic. Applies to every scify repository that has no file of its own. |
 | `profile/README.md` | Organisation profile page | Automatic. Shown on https://github.com/scify. |
-| `workflow-templates/` | Starter workflows | Actions tab → New workflow → "By SciFY". The developer gets a copy. Templates exist for Laravel CI and Node CI. |
+| `workflow-templates/` | Starter workflows | Actions tab → New workflow → "By SciFY". The developer gets a copy. Templates exist for Laravel CI, Node CI and Security. |
 | `.github/workflows/*.yml` | Reusable workflows (`workflow_call`) | Called with `uses: scify/.github/.github/workflows/<name>.yml@v0.1`. One implementation, shared by all callers. |
 | `.github/actions/*/` | Composite actions | Called as a step with `uses: scify/.github/.github/actions/<name>@v0.1`. Each folder has its own README. |
 | `templates/dependabot-*.yml` | Dependabot configuration | Manual copy to `.github/dependabot.yml`. GitHub has no default mechanism for Dependabot. |
@@ -42,7 +42,8 @@ To use them in your application, read the
 lists every input with example values, and gives recipes and troubleshooting.
 
 The quickest start for CI: open your repository's **Actions** tab, click
-**New workflow**, and pick **SciFY Laravel CI** or **SciFY Node CI**.
+**New workflow**, and pick **SciFY Laravel CI** or **SciFY Node CI**. Add
+**SciFY Security** the same way.
 
 ## Dependabot
 

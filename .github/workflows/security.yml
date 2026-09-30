@@ -11,7 +11,8 @@
 #       uses: scify/.github/.github/workflows/security.yml@v0.1
 #
 # Jobs, all independent:
-#   secrets        committed .env files, Gitleaks over the full git history
+#   secrets        committed .env files; Gitleaks over the pull request commits,
+#                  or the full history on push and schedule
 #   dev-configs    scripts and suspicious commands in .vscode/.claude/.cursor/.idea
 #                  (scan-dev-configs action; allow reviewed scripts with allowed-dev-scripts)
 #   npm-hardening  .npmrc and lockfile checks (verify-npm-hardening action)
@@ -44,6 +45,14 @@ on:
         description: Fail on suspicious commands in dev tool configs. Default only warns.
         type: boolean
         default: false
+      gitleaks-full-history:
+        description: 'Scan the full git history on pull requests too. By default a pull request scans only its own commits; push and schedule runs always scan the full history. One of: true, false'
+        type: boolean
+        default: false
+      npm-min-release-age:
+        description: "Lowest accepted min-release-age in .npmrc, in days. 7 or more. Example: '14'"
+        type: string
+        default: '7'
       allowed-dev-scripts:
         description: "Newline-separated glob patterns of reviewed script files allowed in dev tool directories. `*` also matches `/`. Example: .claude/hooks/*.sh"
         type: string
@@ -92,17 +101,29 @@ jobs:
           tar -xzf gitleaks.tar.gz gitleaks
           rm gitleaks.tar.gz
 
+      # Gitleaks also reads .gitleaksignore (fingerprints of accepted findings)
+      # from the repository root by itself.
       - name: Run Gitleaks
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          FULL_HISTORY: ${{ inputs.gitleaks-full-history }}
         run: |
-          config=""
+          args=(git --redact --no-banner)
           if [ -f .gitleaks.toml ]; then
-            config="--config .gitleaks.toml"
+            args+=(--config .gitleaks.toml)
             echo "Using repository .gitleaks.toml"
           else
             echo "No .gitleaks.toml, using the built-in rules"
           fi
-          # shellcheck disable=SC2086
-          ./gitleaks git --redact --no-banner $config .
+          if [ "$EVENT" = pull_request ] && [ "$FULL_HISTORY" != true ]; then
+            echo "Scanning the pull request commits ${BASE_SHA:0:7}..${HEAD_SHA:0:7}"
+            args+=("--log-opts=--no-merges ${BASE_SHA}..${HEAD_SHA}")
+          else
+            echo "Scanning the full git history"
+          fi
+          ./gitleaks "${args[@]}" .
 
   dev-configs:
     name: Dev tool configs
@@ -160,6 +181,7 @@ jobs:
         uses: ./.scify-github/.github/actions/verify-npm-hardening
         with:
           working-directory: ${{ inputs.working-directory }}
+          min-age: ${{ inputs.npm-min-release-age }}
 
       - name: No package.json
         if: hashFiles(format('{0}/package.json', inputs.working-directory)) == ''

@@ -1,0 +1,7 @@
+{
+    "name": "SciFY Security",
+    "description": "Committed env files, Gitleaks, dev tool configs, npm hardening, composer audit and npm audit through the shared scify/.github workflow.",
+    "iconName": "octicon shield-check",
+    "categories": ["Security"],
+    "filePatterns": ["composer.json$", "package.json$"]
+}

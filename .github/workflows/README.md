@@ -69,16 +69,17 @@ Rules that apply to every workflow here:
 
 ### Start from a template
 
-The CI workflows have starter templates. Each template lists every input with
-its default and example values.
+The workflows have starter templates: SciFY Laravel CI, SciFY Node CI and SciFY
+Security. Each template lists every input with its default and example values.
 
 1. Open your repository's **Actions** tab and click **New workflow**.
-2. Under "By SciFY", pick **SciFY Laravel CI** or **SciFY Node CI**.
+2. Under "By SciFY", pick **SciFY Laravel CI**, **SciFY Node CI** or **SciFY Security**.
 3. Uncomment and change only the inputs that you need.
 4. Commit the file.
 
-You can also copy [`laravel-ci.yml`](../../workflow-templates/laravel-ci.yml) or
-[`node-ci.yml`](../../workflow-templates/node-ci.yml) from `workflow-templates/`
+You can also copy [`laravel-ci.yml`](../../workflow-templates/laravel-ci.yml),
+[`node-ci.yml`](../../workflow-templates/node-ci.yml) or
+[`security.yml`](../../workflow-templates/security.yml) from `workflow-templates/`
 by hand. Replace `$default-branch` with `main`.
 
 ### The CI model
@@ -296,7 +297,7 @@ npm-only and PHP-only repositories.
 
 | Job | What it checks |
 | --- | --- |
-| `Secrets` | Committed `.env` files anywhere in the repository, and Gitleaks over the full git history. Examples, `.env.testing`, `.env.ci` and templates (`.dist`, `.sample`, `.template`, `.tpl`, `.j2`, `.jinja`, `.jinja2`) are allowed |
+| `Secrets` | Committed `.env` files anywhere in the repository, and Gitleaks. On a pull request, Gitleaks scans only the pull request's commits. On push and schedule, it scans the full git history. Examples, `.env.testing`, `.env.ci` and templates (`.dist`, `.sample`, `.template`, `.tpl`, `.j2`, `.jinja`, `.jinja2`) are allowed |
 | `Dev tool configs` | Script files and suspicious commands in `.vscode`, `.claude`, `.cursor` and `.idea`. See [`scan-dev-configs`](../actions/scan-dev-configs/README.md) |
 | `npm supply chain hardening` | `.npmrc` settings and lockfile. See [`verify-npm-hardening`](../actions/verify-npm-hardening/README.md) |
 | `Dependency audit` | `composer audit --locked` and `npm audit` against the lock files. No install is needed |
@@ -306,12 +307,17 @@ npm-only and PHP-only repositories.
 | `working-directory` | `.` | `frontend`, `apps/web`. The npm hardening and audit checks run there |
 | `php-version` | `'8.4'` | `'8.3'` |
 | `composer-abandoned` | `report` (list, do not fail) | `ignore`, `fail` |
+| `gitleaks-full-history` | `false` (pull requests scan their own commits) | `true` (every run scans the full history) |
+| `npm-min-release-age` | `'7'` | `'14'` (days; 7 or more) |
 | `npm-audit-level` | `high` | `low`, `moderate`, `critical` |
 | `strict-dev-configs` | `false` (warn only) | `true` (fail on suspicious commands) |
 | `allowed-dev-scripts` | `''` (no scripts allowed) | `.claude/hooks/*.sh` (one glob per line; `*` also matches `/`) |
 
 Run it on pull requests and once a week. The weekly run finds new advisories
 for dependencies that did not change.
+
+The weekly run also scans the full git history with Gitleaks, so it finds a
+secret that reached `main` without a pull request.
 
 In a public repository, GitHub disables scheduled workflows after 60 days
 without repository activity, and it sends only an email. After a quiet period,
@@ -356,6 +362,7 @@ jobs:
 | Browser tests also run in `Backend tests` (Laravel) | Exclude the browser suite in `test-command`, for example `vendor/bin/pest --exclude-testsuite=Browser`. |
 | `Environment files are committed to the repository` | A real env file, such as `.env` or `.env.production`, is committed. Remove it and rotate its secrets. A template must end in `.example`, `.dist`, `.sample`, `.template`, `.tpl`, `.j2`, `.jinja` or `.jinja2`. |
 | `Found 1 abandoned package` fails the `Dependency audit` job | The caller sets `composer-abandoned: fail`. Replace the package, or set `composer-abandoned: report`. |
+| `leaks found` in the `Secrets` job | Gitleaks found a secret. Rotate it first: removing it from the code does not remove it from the git history. If the finding is a false positive, add its fingerprint (printed in the log, for example `abc123:config/app.php:generic-api-key:12`) as one line to `.gitleaksignore` in the repository root. |
 | The weekly security run stopped | GitHub disables scheduled workflows in a public repository after 60 days without activity. Open the workflow in the **Actions** tab and click **Enable workflow**. |
 | `Script files found in dev tool directories` | A script file is in `.vscode`, `.claude`, `.cursor` or `.idea`. Remove it, or review it and add it to `allowed-dev-scripts`. |
 | PHPStan or Rector re-analyse every file on each run | `analysis-cache-paths` does not match `tmpDir` in `phpstan.neon` or `cacheDirectory` in `rector.php`. |
