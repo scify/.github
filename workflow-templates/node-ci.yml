@@ -27,21 +27,21 @@ jobs:
     # secrets:
     #   CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}  # needed only with coverage-file
     # with:
-      # Node.js
-      # node-version-file: .nvmrc                     # e.g. frontend/.nvmrc, package.json
-      # node-version: ''                              # e.g. '22', 'lts/*' (takes precedence over node-version-file)
-      # working-directory: .                          # e.g. frontend, apps/web
+    #   # Node.js
+    #   node-version-file: .nvmrc                     # e.g. frontend/.nvmrc, package.json
+    #   node-version: ''                              # e.g. '22', 'lts/*' (takes precedence over node-version-file)
+    #   working-directory: .                          # e.g. frontend, apps/web
 
-      # Static checks ('' = npm `check`/`lint` and `types`/`type-check` scripts)
-      # lint-command: ''                              # e.g. npm run lint -- --max-warnings=0
-      # types-command: ''                             # e.g. npx vue-tsc --noEmit
+    #   # Static checks ('' = npm `check`/`lint` and `types`/`type-check` scripts)
+    #   lint-command: ''                              # e.g. npm run lint -- --max-warnings=0
+    #   types-command: ''                             # e.g. npx vue-tsc --noEmit
 
-      # Tests and build ('' = npm `test` script)
-      # test-command: ''                              # e.g. npx vitest run --coverage --coverage.reporter=lcov
-      # coverage-file: ''                             # e.g. coverage/lcov.info (turns on the Codecov upload)
-      # build-command: npm run build                  # e.g. npm run build -- --mode staging
+    #   # Tests and build ('' = npm `test` script)
+    #   test-command: ''                              # e.g. npx vitest run --coverage --coverage.reporter=lcov
+    #   coverage-file: ''                             # e.g. coverage/lcov.info (turns on the Codecov upload)
+    #   build-command: npm run build                  # e.g. npm run build -- --mode staging
 
-      # Browser tests
-      # browser-tests: false                          # true: run the Playwright job
-      # browser-test-command: npx playwright test     # e.g. npm run test:e2e
-      # playwright-browsers: chromium                 # e.g. chromium firefox webkit
+    #   # Browser tests
+    #   browser-tests: false                          # true: run the Playwright job
+    #   browser-test-command: npx playwright test     # e.g. npm run test:e2e
+    #   playwright-browsers: chromium                 # e.g. chromium firefox webkit
