@@ -1,10 +1,21 @@
 # scify/.github
 
-WIP: Organisation-wide defaults and reusable GitHub Actions for [SciFY](https://github.com/scify) repositories.
+WIP: Organisation-wide defaults and shared CI for [SciFY](https://github.com/scify) repositories.
 
 This repository is public. GitHub requires that for the default files, the profile
 README and the workflow templates to take effect. Do not commit secrets, hostnames
 or internal URLs here.
+
+## Scope
+
+This repository holds only content that is safe to publish:
+
+- Community health files and the organisation profile
+- Reusable CI and security workflows, and the composite actions they use
+- Workflow templates and Dependabot templates
+
+Deployment workflows do not belong here. They need server details and
+deployment secrets, so they will live in a separate private repository.
 
 ## What is in here
 
@@ -12,142 +23,26 @@ or internal URLs here.
 | --- | --- | --- |
 | `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `PULL_REQUEST_TEMPLATE.md`, `ISSUE_TEMPLATE/` | Default community health files | Automatic. Applies to every scify repository that has no file of its own. |
 | `profile/README.md` | Organisation profile page | Automatic. Shown on https://github.com/scify. |
-| `workflow-templates/` | Starter workflows | Actions tab → New workflow → "By SciFY". The developer gets a copy. Only the Laravel CI template exists so far. Node and deploy templates come later. |
+| `workflow-templates/` | Starter workflows | Actions tab → New workflow → "By SciFY". The developer gets a copy. Templates exist for Laravel CI and Node CI. |
 | `.github/workflows/*.yml` | Reusable workflows (`workflow_call`) | Called with `uses: scify/.github/.github/workflows/<name>.yml@v0.1`. One implementation, shared by all callers. |
 | `.github/actions/*/` | Composite actions | Called as a step with `uses: scify/.github/.github/actions/<name>@v0.1`. Each folder has its own README. |
 | `templates/dependabot-*.yml` | Dependabot configuration | Manual copy to `.github/dependabot.yml`. GitHub has no default mechanism for Dependabot. |
+| `tests/fixtures/`, `scripts/` | Fixture projects and checker scripts for this repository's own CI (`self-check.yml`) | Not used by other repositories. |
 
 ## Reusable workflows
 
-| Workflow | For | Inputs of note |
-| --- | --- | --- |
-| `laravel-ci.yml` | Laravel repositories | `php-version`, `frontend`, `build-frontend-for-tests` |
-| `node-ci.yml` | npm-only repositories | `node-version`, `working-directory`, `build-command` |
-| `laravel-deploy.yml` | Laravel app to a SciFY server over SSH | `environment`, `php-binary`, `build-command`, `extra-exclude`, `extra-checkout-*` |
-| `node-deploy.yml` | Static frontend build to a server over SSH | `environment`, `build-directory`, `delete-remote-files` |
-| `security.yml` | Any repository. Committed `.env` files, Gitleaks, dev tool configs, npm hardening, `composer audit`, `npm audit` | `php-version`, `npm-audit-level`, `strict-dev-configs` |
-| `license-check.yml` | Opt-in. Allow-list check of Composer and npm production licences. Not for WordPress repositories | `allowed-licenses` |
-| `owasp-dependency-check.yml` | Opt-in. OWASP Dependency-Check HTML report | `fail-on-cvss`, secret `NVD_API_KEY` |
+| Workflow | For |
+| --- | --- |
+| `laravel-ci.yml` | CI for Laravel applications |
+| `node-ci.yml` | CI for npm-only applications |
+| `security.yml` | Secret, dev tool config, npm hardening and dependency audit checks |
 
-Each file starts with a comment block that lists every input, secret and server requirement.
+To use them in your application, read the
+[workflow guide](.github/workflows/README.md). It explains how a call works,
+lists every input with example values, and gives recipes and troubleshooting.
 
-### Add CI to a repository
-
-Laravel repositories:
-
-1. Open the repository's **Actions** tab and click **New workflow**.
-2. Pick **SciFY Laravel CI** under "By SciFY".
-3. Adjust the inputs in the generated file and commit it.
-
-Or copy `workflow-templates/laravel-ci.yml` by hand into `.github/workflows/ci.yml`
-and replace `$default-branch` with `main`.
-
-npm-only repositories have no template yet. Create `.github/workflows/ci.yml` with:
-
-```yaml
-name: CI
-on:
-  push:
-    branches: [main]
-  pull_request:
-permissions:
-  contents: read
-jobs:
-  ci:
-    uses: scify/.github/.github/workflows/node-ci.yml@v0.1
-```
-
-### Add deployment to a repository
-
-1. Create a GitHub **environment** named `production` in the repository settings.
-2. Add these environment secrets:
-
-   | Secret | Value |
-   | --- | --- |
-   | `SSH_HOST` | Server hostname or IP |
-   | `SSH_PORT` | SSH port. Optional, defaults to 22 |
-   | `SSH_USER` | Deploy user |
-   | `SSH_PRIVATE_KEY` | Private key of the deploy user |
-   | `PROJECT_PATH` | Absolute path of the application on the server |
-   | `ENV_FILE` | Full content of the production `.env`. Optional for Laravel: when empty, the `.env` already on the server is kept |
-
-3. Create `.github/workflows/deploy-production.yml`. There is no template yet. For Laravel:
-
-   ```yaml
-   name: Deploy production
-   on:
-     workflow_dispatch:
-   permissions:
-     contents: read
-   jobs:
-     deploy:
-       uses: scify/.github/.github/workflows/laravel-deploy.yml@v0.1
-       with:
-         environment: production
-       secrets:
-         SSH_HOST: ${{ secrets.SSH_HOST }}
-         SSH_PORT: ${{ secrets.SSH_PORT }}
-         SSH_USER: ${{ secrets.SSH_USER }}
-         SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-         PROJECT_PATH: ${{ secrets.PROJECT_PATH }}
-         ENV_FILE: ${{ secrets.ENV_FILE }}
-   ```
-
-   For a static frontend, call `node-deploy.yml` instead with the same secrets.
-4. Run it from the Actions tab with **Run workflow**.
-
-Laravel-specific server requirements are listed at the top of `.github/workflows/laravel-deploy.yml`.
-
-### Add security scanning to a repository
-
-Create `.github/workflows/security.yml`:
-
-```yaml
-name: Security
-on:
-  pull_request:
-  schedule:
-    - cron: '0 11 * * 1'
-permissions:
-  contents: read
-jobs:
-  security:
-    uses: scify/.github/.github/workflows/security.yml@v0.1
-```
-
-Every check skips itself when the repository lacks the matching files, so the
-same call works for Laravel, npm-only and PHP-only repositories. The npm
-hardening check expects the `.npmrc` described in
-`.github/actions/verify-npm-hardening/README.md`.
-
-Licence and OWASP scans are separate workflows. Add a job that calls
-`license-check.yml` or `owasp-dependency-check.yml` when a project needs them.
-
-### Versioning
-
-This repository is work in progress. Releases are tagged `v0.x` and callers
-pin to the current one, `v0.1`. Any `v0.x` release may change inputs or
-defaults. When the workflows have run in real repositories for a while, `v1`
-becomes the first stable tag and moves forward only for backwards-compatible
-fixes.
-
-To publish a new release:
-
-1. Update every `@v0.x` reference in this repository to the new tag. The
-   `security.yml` workflow calls the composite actions by tag, so a missing
-   update breaks it.
-2. Tag and push:
-
-   ```bash
-   git tag v0.2 && git push origin v0.2
-   ```
-
-### Composite actions and the release tag
-
-A reusable workflow cannot reference a sibling action by relative path, so
-`security.yml` calls the actions in this repository as
-`scify/.github/.github/actions/<name>@v0.1`. When you test a workflow change on a
-branch, the actions still come from `v1`. Move the tag after both are merged.
+The quickest start for CI: open your repository's **Actions** tab, click
+**New workflow**, and pick **SciFY Laravel CI** or **SciFY Node CI**.
 
 ## Dependabot
 
@@ -172,9 +67,52 @@ settings and commit the file.
 All three templates configure **security updates only**. A change to a
 template does not reach existing copies. Re-run the command to pick it up.
 
-## Contributing to this repository
+## Maintaining this repository
 
+### Versioning
+
+This repository is work in progress. Releases are tagged `v0.x` and callers
+pin to the current one, `v0.1`. Any `v0.x` release may change inputs or
+defaults. When the workflows have run in real repositories for a while, `v1`
+becomes the first stable tag and moves forward only for backwards-compatible
+fixes.
+
+To publish a new release:
+
+1. Update every `@v0.x` reference in the documentation and comments to the new
+   tag. The self-check fails when they differ.
+2. Tag and push:
+
+   ```bash
+   git tag v0.2 && git push origin v0.2
+   ```
+
+### Composite actions and the release tag
+
+The organisation requires every action to be pinned to a full commit SHA, and
+this includes actions from `scify/.github`. Reusable workflows can still be
+called by tag. So:
+
+- `security.yml` does not call its actions by tag. It checks out `scify/.github`
+  at `job.workflow_sha`, the commit of the workflow file itself, and runs the
+  actions from that local path. The actions always match the workflow version.
+- `laravel-ci.yml` and `node-ci.yml` use no composite actions. They share setup
+  steps between jobs with YAML anchors (`&name` and `*name`).
+
+A branch test therefore runs the branch code everywhere. The `@v0.1` references
+that remain are in comments and documentation. The self-check fails when they
+differ.
+
+### Rules for changes
+
+- Add only content that is safe to publish. Deployment workflows and anything that needs server details go to the private repository.
 - Pin every third-party action to a full commit SHA with the version in a trailing comment.
 - Keep reusable workflows tolerant: run a tool only when the repository is configured for it.
 - Test a change by pointing a caller at your branch: `uses: scify/.github/.github/workflows/laravel-ci.yml@my-branch`.
-- Run `actionlint` before you push.
+- The `Self-check` workflow (`.github/workflows/self-check.yml`) runs on every push and pull request. It runs actionlint with shellcheck, runs shellcheck on the composite actions, and checks that the workflow guide lists every input. Run the same checks locally before you push:
+
+  ```bash
+  actionlint .github/workflows/*.yml
+  python3 scripts/shellcheck-actions.py
+  python3 scripts/check-workflow-docs.py
+  ```
