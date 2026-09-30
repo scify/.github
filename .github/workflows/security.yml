@@ -24,6 +24,10 @@ name: Security
 on:
   workflow_call:
     inputs:
+      working-directory:
+        description: 'Folder that holds composer.json and package.json, relative to the repository root. The npm hardening and audit checks run there. Example: ., frontend, apps/web'
+        type: string
+        default: .
       php-version:
         description: PHP version used to run `composer audit`.
         type: string
@@ -56,12 +60,16 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # The whole repository, not only working-directory. Examples, test files
+      # and templates (.dist, .sample, .template, .tpl, Jinja) are allowed.
       - name: Check for committed environment files
         run: |
           found=$(find . -type f -name '.env*' \
-            -not -path './vendor/*' -not -path './node_modules/*' -not -path './.git/*' \
-            -not -name '.env.example' -not -name '.env.*.example' \
-            -not -name '.env.testing' -not -name '.env.ci')
+            -not -path '*/vendor/*' -not -path '*/node_modules/*' -not -path './.git/*' \
+            -not -name '.env.testing' -not -name '.env.ci' \
+            -not -name '.env*.example' -not -name '.env*.dist' -not -name '.env*.sample' \
+            -not -name '.env*.template' -not -name '.env*.tpl' \
+            -not -name '.env*.j2' -not -name '.env*.jinja' -not -name '.env*.jinja2')
           if [ -n "$found" ]; then
             echo "::error::Environment files are committed to the repository:"
             echo "$found"
@@ -123,6 +131,9 @@ jobs:
     name: npm supply chain hardening
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -141,17 +152,22 @@ jobs:
           persist-credentials: false
 
       - name: Verify npm hardening
-        if: hashFiles('package.json') != ''
+        if: hashFiles(format('{0}/package.json', inputs.working-directory)) != ''
         uses: ./.scify-github/.github/actions/verify-npm-hardening
+        with:
+          working-directory: ${{ inputs.working-directory }}
 
       - name: No package.json
-        if: hashFiles('package.json') == ''
+        if: hashFiles(format('{0}/package.json', inputs.working-directory)) == ''
         run: echo "No package.json, skipping."
 
   audit:
     name: Dependency audit
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -159,23 +175,24 @@ jobs:
           persist-credentials: false
 
       - name: Set up PHP
-        if: hashFiles('composer.lock') != ''
+        if: hashFiles(format('{0}/composer.lock', inputs.working-directory)) != ''
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           php-version: ${{ inputs.php-version }}
           coverage: none
           tools: composer:v2
 
+      # --locked reads composer.lock, so no `composer install` is needed.
       - name: Composer audit
-        if: hashFiles('composer.lock') != ''
-        run: composer audit --format=table
+        if: hashFiles(format('{0}/composer.lock', inputs.working-directory)) != ''
+        run: composer audit --locked --format=table
 
       - name: npm audit
-        if: hashFiles('package-lock.json') != ''
+        if: hashFiles(format('{0}/package-lock.json', inputs.working-directory)) != ''
         env:
           LEVEL: ${{ inputs.npm-audit-level }}
         run: npm audit --audit-level="$LEVEL"
 
       - name: Nothing to audit
-        if: hashFiles('composer.lock', 'package-lock.json') == ''
+        if: hashFiles(format('{0}/composer.lock', inputs.working-directory), format('{0}/package-lock.json', inputs.working-directory)) == ''
         run: echo "No composer.lock or package-lock.json, skipping."

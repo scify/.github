@@ -7,7 +7,8 @@
 #   - every workflow template .properties.json file parses
 #   - every internal `scify/.github/...@vX` reference uses the same release tag
 #   - the composite actions pass on good fixtures and fail on bad ones
-#   - security.yml runs on this repository (it loads its actions by job.workflow_sha)
+#   - security.yml runs on this repository (it loads its actions by job.workflow_sha),
+#     and on tests/fixtures/security (composer.lock, package-lock.json, .env template)
 #   - smoke tests: laravel-ci.yml and node-ci.yml run against the fixture
 #     projects in tests/fixtures/, once with defaults and once with commands
 #
@@ -159,6 +160,12 @@ jobs:
   security:
     name: Security workflow on this repository
     uses: ./.github/workflows/security.yml
+
+  security-fixture:
+    name: Security workflow on the fixture
+    uses: ./.github/workflows/security.yml
+    with:
+      working-directory: tests/fixtures/security
 
   laravel-defaults:
     name: Laravel CI, defaults
