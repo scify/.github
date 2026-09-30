@@ -83,6 +83,12 @@ convention:
 When the workflows have run in real repositories for a while, `v1` becomes the
 first stable line.
 
+The ruleset `protect-release-tags` blocks creating, moving and deleting `v*`
+tags. Only organisation owners can bypass it, so Actions tokens, apps and
+deploy keys cannot change a release. Callers reference workflows by tag, and
+the organisation's SHA pinning policy does not cover reusable workflows, so
+these tags decide what code runs in every caller.
+
 To publish a fix release on the `v0.1` line:
 
 1. Merge the fix to `main` and wait for a green Self-check.
