@@ -16,10 +16,12 @@
 version: 2
 
 updates:
-    # Reads `uses:` lines in .github/workflows/*.yml. For this ecosystem `/`
-    # means .github/workflows, not the repository root.
+    # `/` means .github/workflows, not the repository root. Composite actions
+    # are not covered by `/`, so each action folder is listed as well.
     - package-ecosystem: github-actions
-      directory: /
+      directories:
+          - /
+          - /.github/actions/*
       schedule:
           interval: weekly
           day: monday
