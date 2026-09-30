@@ -12,14 +12,13 @@
 #
 # Jobs, all independent:
 #   secrets        committed .env files, Gitleaks over the full git history
-#   dev-configs    .vscode/.claude/.cursor/.idea content (scan-dev-configs action)
+#   dev-configs    scripts and suspicious commands in .vscode/.claude/.cursor/.idea
+#                  (scan-dev-configs action; allow reviewed scripts with allowed-dev-scripts)
 #   npm-hardening  .npmrc and lockfile checks (verify-npm-hardening action)
 #   audit          `composer audit` and `npm audit` against the lock files
 #
 # Each check runs only when the repository has the matching files, so the
 # same call works for Laravel, npm-only and PHP-only repositories.
-# Licence and OWASP checks are separate opt-in workflows:
-# license-check.yml and owasp-dependency-check.yml.
 name: Security
 
 on:
@@ -37,6 +36,10 @@ on:
         description: Fail on suspicious commands in dev tool configs. Default only warns.
         type: boolean
         default: false
+      allowed-dev-scripts:
+        description: "Newline-separated glob patterns of reviewed script files allowed in dev tool directories. `*` also matches `/`. Example: .claude/hooks/*.sh"
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -99,10 +102,22 @@ jobs:
         with:
           persist-credentials: false
 
+      # The org requires actions pinned by SHA, so this workflow cannot call its
+      # own actions by tag. It checks out scify/.github at the exact commit of
+      # this workflow file and runs the actions from a local path.
+      - name: Check out the shared actions
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .scify-github
+          persist-credentials: false
+
       - name: Scan dev tool config directories
-        uses: scify/.github/.github/actions/scan-dev-configs@v0.1
+        uses: ./.scify-github/.github/actions/scan-dev-configs
         with:
           strict: ${{ inputs.strict-dev-configs }}
+          allowed-scripts: ${{ inputs.allowed-dev-scripts }}
 
   npm-hardening:
     name: npm supply chain hardening
@@ -114,9 +129,20 @@ jobs:
         with:
           persist-credentials: false
 
+      # The org requires actions pinned by SHA, so this workflow cannot call its
+      # own actions by tag. It checks out scify/.github at the exact commit of
+      # this workflow file and runs the actions from a local path.
+      - name: Check out the shared actions
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .scify-github
+          persist-credentials: false
+
       - name: Verify npm hardening
         if: hashFiles('package.json') != ''
-        uses: scify/.github/.github/actions/verify-npm-hardening@v0.1
+        uses: ./.scify-github/.github/actions/verify-npm-hardening
 
       - name: No package.json
         if: hashFiles('package.json') == ''

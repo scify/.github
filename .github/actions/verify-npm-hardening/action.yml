@@ -67,7 +67,9 @@ runs:
                 errors=$((errors + 1))
               fi
 
-              age=$(grep '^min-release-age=' .npmrc | cut -d= -f2)
+              # grep exits 1 when the setting is missing. `|| true` keeps
+              # `bash -e -o pipefail` running, so the error below is printed.
+              age=$(grep '^min-release-age=' .npmrc | cut -d= -f2 || true)
               if ! [ "$age" -ge "$MIN_AGE" ] 2>/dev/null; then
                 echo "::error::Missing or invalid .npmrc setting: min-release-age must be a number >= ${MIN_AGE}"
                 errors=$((errors + 1))

@@ -1,100 +1,146 @@
 # Scans dev tool config directories for signs of compromise.
-# Place AFTER checkout, runs independently of npm hardening.
+# Place AFTER checkout. Runs independently of npm hardening.
 #
 # Usage:
 #
 #   steps:
-#     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-#     - uses: ./.github/actions/scan-dev-configs
+#     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+#       with:
+#         persist-credentials: false
+#     - uses: scify/.github/.github/actions/scan-dev-configs@<commit-sha> # v0.1
+#       with:
+#         allowed-scripts: |
+#           .claude/hooks/*.sh
+#         strict: 'false'
 #
 # Checks:
-#   1. No executable script files in dev tool directories (always fails)
-#   2. No suspicious commands in config files (warns, fails with strict: true)
-#
-# Inputs:
-#   strict (optional, default: false)
-#     Fail on suspicious commands instead of warning. Editor task files and
-#     agent permission lists legitimately contain `npx` or `curl`, so the
-#     default only warns.
+#   1. No script files in dev tool directories, unless allowed-scripts lists
+#      them (always fails)
+#   2. No suspicious commands in any file there (warns, fails with strict: true)
 
 name: Scan dev tool configs
-description: Checks .vscode, .claude, .cursor, and .idea directories for suspicious content
+description: Checks .vscode, .claude, .cursor and .idea directories for scripts and suspicious commands
 
 inputs:
-    strict:
-        description: Fail on suspicious commands instead of warning
-        required: false
-        default: 'false'
+  allowed-scripts:
+    description: "Newline-separated glob patterns, relative to the repository root, of script files that are allowed. `*` also matches `/`. Example: .claude/hooks/*.sh"
+    required: false
+    default: ''
+  strict:
+    description: "Fail on suspicious commands instead of warning. One of: 'true', 'false'"
+    required: false
+    default: 'false'
 
 runs:
-    using: composite
-    steps:
-        - name: Detect dev tool directories
-          id: detect
-          shell: bash
-          run: |
-              dirs=""
-              for d in .vscode .claude .cursor .idea; do
-                [ -d "$d" ] && dirs="$dirs $d"
-              done
+  using: composite
+  steps:
+    - name: Detect dev tool directories
+      id: detect
+      shell: bash
+      run: |
+        dirs=""
+        for d in .vscode .claude .cursor .idea; do
+          [ -d "$d" ] && dirs="$dirs $d"
+        done
 
-              if [ -z "$dirs" ]; then
-                echo "No dev tool directories found in repository."
-                echo "found=false" >> "$GITHUB_OUTPUT"
-              else
-                echo "Scanning:$dirs"
-                echo "found=true" >> "$GITHUB_OUTPUT"
-                echo "dirs=$dirs" >> "$GITHUB_OUTPUT"
-              fi
+        if [ -z "$dirs" ]; then
+          echo "No dev tool directories found in repository."
+          echo "found=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "Scanning:$dirs"
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "dirs=$dirs" >> "$GITHUB_OUTPUT"
+        fi
 
-        - name: Check for executable script files
-          if: steps.detect.outputs.found == 'true'
-          shell: bash
-          env:
-              DIRS: ${{ steps.detect.outputs.dirs }}
-          run: |
-              # Dev tool directories should not contain executable scripts.
-              js_files=$(find $DIRS -type f \( -name "*.js" -o -name "*.mjs" -o -name "*.cjs" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" -o -name "*.mts" -o -name "*.cts" \) 2>/dev/null)
+    - name: Check for script files
+      if: steps.detect.outputs.found == 'true'
+      shell: bash
+      env:
+        DIRS: ${{ steps.detect.outputs.dirs }}
+        ALLOWED: ${{ inputs.allowed-scripts }}
+      run: |
+        # A script is a file with a script or binary extension, the executable
+        # bit, or a shebang line. Dev tool directories should hold only config.
+        is_script() {
+          case "${1##*/}" in
+            *.js|*.mjs|*.cjs|*.jsx|*.ts|*.tsx|*.mts|*.cts) return 0 ;;
+            *.sh|*.bash|*.zsh|*.fish|*.py|*.rb|*.pl|*.php) return 0 ;;
+            *.ps1|*.psm1|*.bat|*.cmd|*.vbs|*.exe|*.dll|*.so|*.dylib|*.jar) return 0 ;;
+          esac
+          [ -x "$1" ] && return 0
+          [ "$(head -c 2 "$1" 2>/dev/null)" = '#!' ] && return 0
+          return 1
+        }
 
-              if [ -n "$js_files" ]; then
-                echo "::error::Executable script files found in dev tool directories:"
-                echo "$js_files" | while IFS= read -r file; do
-                  echo "::error::  $file"
-                done
-                exit 1
-              fi
+        is_allowed() {
+          local pattern
+          while IFS= read -r pattern; do
+            pattern="${pattern#"${pattern%%[![:space:]]*}"}"
+            pattern="${pattern%"${pattern##*[![:space:]]}"}"
+            [ -z "$pattern" ] && continue
+            # Unquoted on purpose: the pattern is a glob.
+            # shellcheck disable=SC2053
+            [[ $1 == $pattern ]] && return 0
+          done <<< "$ALLOWED"
+          return 1
+        }
 
-              echo "No executable script files found."
+        blocked=()
+        # Word splitting is intended: one argument per directory.
+        # shellcheck disable=SC2086
+        while IFS= read -r -d '' file; do
+          is_script "$file" || continue
+          if is_allowed "$file"; then
+            echo "::notice::Allowed script: $file"
+          else
+            blocked+=("$file")
+          fi
+        done < <(find $DIRS -type f -print0 2>/dev/null)
 
-        - name: Check for suspicious commands
-          if: steps.detect.outputs.found == 'true'
-          shell: bash
-          env:
-              DIRS: ${{ steps.detect.outputs.dirs }}
-              STRICT: ${{ inputs.strict }}
-          run: |
-              # Execution and network patterns that have no business in
-              # editor or tool configuration files. Every pattern is anchored
-              # on word boundaries so that "async " does not match "nc ".
-              suspicious='\b(curl|wget|Invoke-WebRequest|iwr|powershell|pwsh|certutil|base64|ncat|socat|npx)\b|\b(ba)?sh -c\b|\bchmod \+x\b|\bnc +\S|\bpython3? -c\b|\bnode -e\b|\beval\('
-              suspect_files=$(grep -Erl "$suspicious" $DIRS 2>/dev/null)
+        if [ "${#blocked[@]}" -gt 0 ]; then
+          echo "::error::Script files found in dev tool directories:"
+          for file in "${blocked[@]}"; do
+            echo "::error::  $file"
+          done
+          echo "Remove each file, or add a reviewed file to allowed-scripts."
+          exit 1
+        fi
 
-              level=warning
-              [ "$STRICT" = "true" ] && level=error
+        echo "No unexpected script files found."
 
-              if [ -n "$suspect_files" ]; then
-                echo "::${level}::Suspicious commands found in dev tool configs:"
-                echo "$suspect_files" | while IFS= read -r file; do
-                  echo "::${level}::  $file"
-                  grep -En "$suspicious" "$file" | while IFS= read -r match; do
-                    echo "::${level}::    $match"
-                  done
-                done
-                if [ "$STRICT" = "true" ]; then
-                  exit 1
-                fi
-                echo "Review the matches above. Set strict: true to fail on them."
-                exit 0
-              fi
+    # Allowed scripts are scanned too. The allowlist permits the file, not
+    # every command in it.
+    - name: Check for suspicious commands
+      if: steps.detect.outputs.found == 'true'
+      shell: bash
+      env:
+        DIRS: ${{ steps.detect.outputs.dirs }}
+        STRICT: ${{ inputs.strict }}
+      run: |
+        # Execution and network patterns that have no business in
+        # editor or tool configuration files. Every pattern is anchored
+        # on word boundaries so that "async " does not match "nc ".
+        suspicious='\b(curl|wget|Invoke-WebRequest|iwr|powershell|pwsh|certutil|base64|ncat|socat|npx)\b|\b(ba)?sh -c\b|\bchmod \+x\b|\bnc +\S|\bpython3? -c\b|\bnode -e\b|\beval\('
+        # grep exits 1 when nothing matches. `|| true` keeps `bash -e` running.
+        # shellcheck disable=SC2086
+        suspect_files=$(grep -Erl "$suspicious" $DIRS 2>/dev/null || true)
 
-              echo "No suspicious commands found."
+        level=warning
+        [ "$STRICT" = "true" ] && level=error
+
+        if [ -n "$suspect_files" ]; then
+          echo "::${level}::Suspicious commands found in dev tool configs:"
+          echo "$suspect_files" | while IFS= read -r file; do
+            echo "::${level}::  $file"
+            grep -En "$suspicious" "$file" | while IFS= read -r match; do
+              echo "::${level}::    $match"
+            done
+          done
+          if [ "$STRICT" = "true" ]; then
+            exit 1
+          fi
+          echo "Review the matches above. Set strict: true to fail on them."
+          exit 0
+        fi
+
+        echo "No suspicious commands found."

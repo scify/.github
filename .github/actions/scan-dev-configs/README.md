@@ -10,7 +10,7 @@ If none of these directories exist in the repository, the action passes silently
 
 | Check | What triggers a failure |
 |-------|----------------------|
-| Executable scripts | Any `.js`, `.mjs`, `.cjs`, `.jsx`, `.ts`, `.tsx`, `.mts`, or `.cts` file exists in a dev tool directory |
+| Script files | A file in a dev tool directory is a script and `allowed-scripts` does not list it. A script is a file with a script or binary extension (`.js`, `.ts`, `.sh`, `.py`, `.ps1`, `.bat`, `.exe`, `.jar` and others), the executable bit, or a `#!` first line |
 | Suspicious commands | Any config file contains execution or network patterns (see list below). Warns by default, fails with `strict: true` |
 
 **Suspicious command patterns:**
@@ -19,18 +19,24 @@ If none of these directories exist in the repository, the action passes silently
 
 Every pattern is matched on word boundaries, so `async` does not trigger `nc`.
 
+Allowed scripts are scanned for suspicious commands too. The allowlist permits the file, not every command in it.
+
 Editor task files (`.vscode/tasks.json`) and agent permission lists (`.claude/settings.json`) legitimately contain `npx` or `curl`. That is why this check warns by default. Review the warnings, and enable `strict` once the repository's config files are clean.
 
 ## Inputs
 
-| Name     | Default | Description                                            |
-|----------|---------|--------------------------------------------------------|
-| `strict` | `false` | Fail on suspicious commands instead of warning.        |
+| Name | Default | Description |
+| --- | --- | --- |
+| `allowed-scripts` | `''` | Newline-separated glob patterns, relative to the repository root, of reviewed script files. `*` also matches `/`. Example: `.claude/hooks/*.sh` |
+| `strict` | `'false'` | Fail on suspicious commands instead of warning. One of: `'true'`, `'false'` |
 
 ```yaml
-- uses: scify/.github/.github/actions/scan-dev-configs@v0.1
+- uses: scify/.github/.github/actions/scan-dev-configs@<commit-sha> # v0.1
   with:
-    strict: true
+    allowed-scripts: |
+      .claude/hooks/*.sh
+      .vscode/extensions/check.js
+    strict: 'true'
 ```
 
 ## Why this exists
@@ -53,15 +59,20 @@ steps:
 
 **Organisation-wide usage** (recommended):
 
-The action is published from the public `scify/.github` repository. Reference it by the `v1` tag:
+In a SciFY repository, call the reusable `security.yml` workflow. It runs this
+action with the other security checks. See the
+[workflow guide](../../workflows/README.md#security).
+
+To use the action on its own, pin it to a full commit SHA. The organisation
+requires this for every action, including actions from `scify/.github`. A tag
+such as `@v0.1` fails. Get the SHA of a release with
+`git ls-remote https://github.com/scify/.github refs/tags/v0.1`:
 
 ```yaml
 steps:
   - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-  - uses: scify/.github/.github/actions/scan-dev-configs@v0.1
+  - uses: scify/.github/.github/actions/scan-dev-configs@<commit-sha> # v0.1
 ```
-
-The reusable `security.yml` workflow in the same repository already runs this action. Call that workflow instead when you want the full set of checks.
 
 ### 2. Placement
 
@@ -71,7 +82,7 @@ Place after `actions/checkout` and before any build or deploy steps. It runs ind
 
 The error output names the exact file and line that triggered the failure:
 
-- **Executable script found:** remove it from the repository. Dev tool directories should not contain executable code (`.js`, `.mjs`, `.cjs`, `.jsx`, `.ts`, `.tsx`, `.mts`, `.cts`).
+- **Script file found:** remove it from the repository. If the script is legitimate, for example a Claude Code hook, review it and add its path to `allowed-scripts`. A reviewer then sees each new allowed path in the pull request.
 - **Suspicious command found:** inspect the config file. Remove entries containing execution or network commands.
 
 If the file is legitimate and expected, reconsider whether it belongs in a dev tool config directory or whether it should live elsewhere in the project.
