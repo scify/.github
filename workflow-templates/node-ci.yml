@@ -1,0 +1,47 @@
+# Continuous integration for an npm-only repository (Vue, React, TypeScript SPA).
+# The logic lives in scify/.github. Change inputs here, not the steps.
+# Guide:  https://github.com/scify/.github/blob/main/.github/workflows/README.md#node-ci
+#
+# Each commented-out input shows its default. Uncomment a line only to change it.
+# The "e.g." comment shows other accepted values.
+# To change an input, also uncomment the `with:` line.
+# In branch protection, require the check "ci / CI".
+name: CI
+
+on:
+  push:
+    branches: [$default-branch]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch or pull request cancels the run in progress.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    uses: scify/.github/.github/workflows/node-ci.yml@v0.1
+    # secrets:
+    #   CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}  # needed only with coverage-file
+    # with:
+      # Node.js
+      # node-version-file: .nvmrc                     # e.g. frontend/.nvmrc, package.json
+      # node-version: ''                              # e.g. '22', 'lts/*' (takes precedence over node-version-file)
+      # working-directory: .                          # e.g. frontend, apps/web
+
+      # Static checks ('' = npm `check`/`lint` and `types`/`type-check` scripts)
+      # lint-command: ''                              # e.g. npm run lint -- --max-warnings=0
+      # types-command: ''                             # e.g. npx vue-tsc --noEmit
+
+      # Tests and build ('' = npm `test` script)
+      # test-command: ''                              # e.g. npx vitest run --coverage --coverage.reporter=lcov
+      # coverage-file: ''                             # e.g. coverage/lcov.info (turns on the Codecov upload)
+      # build-command: npm run build                  # e.g. npm run build -- --mode staging
+
+      # Browser tests
+      # browser-tests: false                          # true: run the Playwright job
+      # browser-test-command: npx playwright test     # e.g. npm run test:e2e
+      # playwright-browsers: chromium                 # e.g. chromium firefox webkit
