@@ -1,140 +1,236 @@
 # Reusable CI workflow for Laravel repositories.
 #
-# Call it from a repository workflow:
+# Minimal call (every value below is a default and can be left out):
 #
 #   jobs:
 #     ci:
 #       uses: scify/.github/.github/workflows/laravel-ci.yml@v0.1
+#
+# Full call, with example values:
+#
+#   jobs:
+#     ci:
+#       uses: scify/.github/.github/workflows/laravel-ci.yml@v0.1
+#       secrets:
+#         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}   # only with coverage-file
 #       with:
+#         working-directory: backend
 #         php-version: '8.4'
+#         php-extensions: mbstring, dom, fileinfo, intl, pdo_sqlite, sqlite3, gd, zip, bcmath
+#         env-file: .env.testing
+#         frontend: true
+#         build-frontend-for-tests: true
+#         node-version-file: .nvmrc
+#         lint-command: composer check
+#         types-command: composer check:types
+#         analysis-cache-paths: |
+#           .phpstan-cache
+#           /tmp/rector
+#         test-command: vendor/bin/pest --exclude-testsuite=Browser --parallel --coverage-clover=coverage/clover.xml
+#         coverage-file: coverage/clover.xml
+#         browser-tests: true
+#         browser-test-command: vendor/bin/pest --testsuite=Browser
 #
-# Every tool runs only when the repository is configured for it:
-#   - Pint      when pint.json exists
-#   - PHPStan   when phpstan.neon or phpstan.neon.dist exists
-#   - Rector    when rector.php exists
-#   - Tests     always, through `php artisan test` (Pest or PHPUnit)
-#   - npm       `check` or `lint`, `types` or `type-check`, `test`, `build`
+# Jobs, all in parallel:
+#   lint   Static checks. With an empty lint-command / types-command, each tool
+#          runs only when the repository is configured for it:
+#            Pint      when pint.json exists
+#            Rector    when rector.php exists (dry run)
+#            PHPStan   when phpstan.neon or phpstan.neon.dist exists
+#            npm       `check` or `lint`, then `types` or `type-check`
+#   test   test-command, then `npm run test` when package.json defines it.
+#          Uploads coverage to Codecov when coverage-file is set.
+#   e2e    Browser tests with Playwright Chromium. Runs only with browser-tests: true.
+#   ci     One aggregate check for branch protection. It is green when no job
+#          failed or was cancelled. A skipped e2e job counts as green.
 #
-# The database for tests comes from the repository's phpunit.xml. The Laravel
-# default (sqlite in memory) needs no service container.
+# Require the check "ci / CI" in branch protection (caller job id / this job name).
+# The database for tests comes from the repository's phpunit.xml and .env file.
+# Every command runs inside working-directory.
+#
+# The setup steps are YAML anchors (&name) in the lint job, reused (*name) by
+# the other jobs. Change a setup step once, in the lint job.
 name: Laravel CI
 
 on:
   workflow_call:
     inputs:
+      working-directory:
+        description: 'Folder that holds composer.json, relative to the repository root. Example: ., backend, apps/api'
+        type: string
+        default: .
       php-version:
-        description: PHP version installed on the runner.
+        description: "PHP version installed on the runner. Example: '8.3', '8.4'"
         type: string
         default: '8.4'
       php-extensions:
-        description: Comma-separated PHP extensions for shivammathur/setup-php.
+        description: 'Comma-separated PHP extensions for shivammathur/setup-php. Example: mbstring, intl, pdo_mysql, redis'
         type: string
         default: mbstring, dom, fileinfo, intl, pdo_sqlite, sqlite3, gd, zip, bcmath
-      node-version-file:
-        description: File that pins the Node.js version (.nvmrc, or package.json with an engines field).
+      env-file:
+        description: "File copied to .env, relative to working-directory. Empty means .env.testing if present, else .env.example. Example: .env.testing, .env.ci"
         type: string
-        default: .nvmrc
+        default: ''
       frontend:
-        description: Run the npm checks job. Set to false for repositories without package.json.
+        description: 'Install Node.js and run the npm checks. Set to false for repositories without package.json. One of: true, false'
         type: boolean
         default: true
       build-frontend-for-tests:
-        description: Build assets before PHP tests. Needed when Blade views use @vite.
+        description: 'Run `npm run build` before test-command. Needed when Blade views use @vite. One of: true, false'
         type: boolean
         default: true
+      node-version-file:
+        description: 'File that pins the Node.js version, relative to the repository root. Example: .nvmrc, backend/.nvmrc, package.json'
+        type: string
+        default: .nvmrc
+      lint-command:
+        description: 'Command for code style and lint. Empty means auto-detect Pint, Rector and npm check/lint. Example: composer check'
+        type: string
+        default: ''
+      types-command:
+        description: 'Command for static analysis. Empty means auto-detect PHPStan and npm types/type-check. Example: composer check:types'
+        type: string
+        default: ''
+      analysis-cache-paths:
+        description: "Newline-separated result cache paths of PHPStan (tmpDir) and Rector (cacheDirectory). Absolute, or relative to the repository root. Defaults are the tools' own. Example: backend/.phpstan-cache"
+        type: string
+        default: |
+          /tmp/phpstan
+          /tmp/rector_cached_files
+      test-command:
+        description: 'Command that runs the backend tests. Example: php artisan test --parallel, vendor/bin/pest --exclude-testsuite=Browser'
+        type: string
+        default: php artisan test
+      coverage-file:
+        description: 'Clover XML file that test-command writes, relative to working-directory. Setting it turns on PCOV and the Codecov upload. Example: coverage/clover.xml'
+        type: string
+        default: ''
+      browser-tests:
+        description: 'Run the e2e job with Playwright Chromium. The job always installs Node.js. One of: true, false'
+        type: boolean
+        default: false
+      browser-test-command:
+        description: 'Command that runs the browser tests. Example: vendor/bin/pest --testsuite=Browser, php artisan dusk'
+        type: string
+        default: vendor/bin/pest --testsuite=Browser
+    secrets:
+      CODECOV_TOKEN:
+        description: Codecov upload token. Needed only when coverage-file is set.
+        required: false
 
 permissions:
   contents: read
 
 jobs:
-  php:
-    name: PHP ${{ inputs.php-version }}
+  lint:
+    name: Static checks
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     steps:
-      - name: Check out repository
+      # ---- Shared setup: the other jobs reuse these steps through *anchors ----
+      - &checkout
+        name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Set up PHP
+      - &setup-php
+        name: Set up PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           php-version: ${{ inputs.php-version }}
           extensions: ${{ inputs.php-extensions }}
-          coverage: none
+          coverage: ${{ inputs.coverage-file != '' && 'pcov' || 'none' }}
           tools: composer:v2
 
-      - name: Get Composer cache directory
+      # Composer's post-autoload-dump script runs `artisan package:discover`, which
+      # boots Laravel, so .env must exist before `composer install`.
+      - &prepare-env
+        name: Prepare environment file
+        env:
+          ENV_FILE: ${{ inputs.env-file }}
+        run: |
+          if [ -f .env ]; then
+            echo "Using the existing .env"
+            exit 0
+          fi
+          if [ -z "$ENV_FILE" ]; then
+            if [ -f .env.testing ]; then ENV_FILE=.env.testing; else ENV_FILE=.env.example; fi
+          fi
+          if [ ! -f "$ENV_FILE" ]; then
+            echo "::error::Environment file '$ENV_FILE' not found"
+            exit 1
+          fi
+          echo "Copying $ENV_FILE to .env"
+          cp "$ENV_FILE" .env
+
+      - &composer-cache-dir
+        name: Get Composer cache directory
         id: composer-cache
         run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
 
-      - name: Cache Composer packages
+      - &composer-cache
+        name: Cache Composer packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          key: composer-${{ runner.os }}-php${{ inputs.php-version }}-${{ hashFiles('composer.lock') }}
+          key: composer-${{ runner.os }}-php${{ inputs.php-version }}-${{ hashFiles(format('{0}/composer.lock', inputs.working-directory)) }}
           restore-keys: composer-${{ runner.os }}-php${{ inputs.php-version }}-
 
-      - name: Install Composer dependencies
+      - &composer-install
+        name: Install Composer dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
-      - name: Prepare environment file
-        run: |
-          if [ ! -f .env ] && [ -f .env.example ]; then
-            cp .env.example .env
-            php artisan key:generate --ansi
-          fi
-
-      - name: Pint
-        if: hashFiles('pint.json') != ''
-        run: vendor/bin/pint --test
-
-      - name: PHPStan
-        if: hashFiles('phpstan.neon', 'phpstan.neon.dist') != ''
-        run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G
-
-      - name: Rector (dry run)
-        if: hashFiles('rector.php') != ''
-        run: vendor/bin/rector --dry-run --no-progress-bar
-
-      - name: Set up Node.js
-        if: inputs.frontend && inputs.build-frontend-for-tests
+      # The e2e job always needs Node.js, the other jobs only with frontend: true.
+      - &setup-node
+        name: Set up Node.js
+        if: inputs.frontend || github.job == 'e2e'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: ${{ inputs.node-version-file }}
           cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
 
-      - name: Build frontend assets for tests
-        if: inputs.frontend && inputs.build-frontend-for-tests
-        run: |
-          npm ci
-          npm run build
-
-      - name: Tests
-        run: php artisan test
-
-  frontend:
-    name: Frontend checks
-    if: inputs.frontend
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: ${{ inputs.node-version-file }}
-          cache: npm
-
-      - name: Install npm dependencies
+      - &npm-ci
+        name: Install npm dependencies
+        if: inputs.frontend || github.job == 'e2e'
         run: npm ci
 
-      - name: Lint, type-check and test
+      - &key-generate
+        name: Generate the application key
+        run: |
+          php artisan key:generate --force --ansi
+          php artisan config:clear --ansi
+      # ---- End of shared setup ----
+
+      # Restoring the most recent result cache makes PHPStan and Rector re-analyse
+      # only the changed files. The key changes on every commit, so each run saves.
+      - name: Cache PHPStan and Rector results
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ inputs.analysis-cache-paths }}
+          key: analysis-${{ runner.os }}-${{ hashFiles(format('{0}/composer.lock', inputs.working-directory), format('{0}/rector.php', inputs.working-directory), format('{0}/phpstan.neon*', inputs.working-directory)) }}-${{ github.sha }}
+          restore-keys: analysis-${{ runner.os }}-${{ hashFiles(format('{0}/composer.lock', inputs.working-directory), format('{0}/rector.php', inputs.working-directory), format('{0}/phpstan.neon*', inputs.working-directory)) }}-
+
+      - name: Code style and lint (custom command)
+        if: inputs.lint-command != ''
+        env:
+          LINT_COMMAND: ${{ inputs.lint-command }}
+        run: bash -c "$LINT_COMMAND"
+
+      - name: Pint
+        if: inputs.lint-command == '' && hashFiles(format('{0}/pint.json', inputs.working-directory)) != ''
+        run: vendor/bin/pint --test
+
+      - name: Rector (dry run)
+        if: inputs.lint-command == '' && hashFiles(format('{0}/rector.php', inputs.working-directory)) != ''
+        run: vendor/bin/rector --dry-run --no-progress-bar
+
+      - name: npm check or lint
+        if: inputs.lint-command == '' && inputs.frontend
         run: |
           has_script() {
             node -e "process.exit(require('./package.json').scripts?.['$1'] ? 0 : 1)"
@@ -143,12 +239,128 @@ jobs:
           elif has_script lint; then npm run lint
           else echo "No check or lint script, skipping"; fi
 
+      - name: Static analysis (custom command)
+        if: inputs.types-command != ''
+        env:
+          TYPES_COMMAND: ${{ inputs.types-command }}
+        run: bash -c "$TYPES_COMMAND"
+
+      - name: PHPStan
+        if: inputs.types-command == '' && hashFiles(format('{0}/phpstan.neon', inputs.working-directory), format('{0}/phpstan.neon.dist', inputs.working-directory)) != ''
+        run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G
+
+      - name: npm types or type-check
+        if: inputs.types-command == '' && inputs.frontend
+        run: |
+          has_script() {
+            node -e "process.exit(require('./package.json').scripts?.['$1'] ? 0 : 1)"
+          }
           if has_script types; then npm run types
           elif has_script type-check; then npm run type-check
           else echo "No types or type-check script, skipping"; fi
 
-          if has_script test; then npm run test
+  test:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - *checkout
+      - *setup-php
+      - *prepare-env
+      - *composer-cache-dir
+      - *composer-cache
+      - *composer-install
+      - *setup-node
+      - *npm-ci
+      - *key-generate
+
+      - name: Build frontend assets
+        if: inputs.frontend && inputs.build-frontend-for-tests
+        run: npm run build
+
+      - name: Tests
+        env:
+          TEST_COMMAND: ${{ inputs.test-command }}
+        run: bash -c "$TEST_COMMAND"
+
+      - name: npm test
+        if: inputs.frontend
+        run: |
+          if node -e "process.exit(require('./package.json').scripts?.test ? 0 : 1)"; then npm run test
           else echo "No test script, skipping"; fi
 
-      - name: Build
-        run: npm run build
+      # Pull requests from forks get no secrets, so a failed upload fails the job
+      # only for pushes and same-repository pull requests.
+      - name: Upload coverage to Codecov
+        if: inputs.coverage-file != ''
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: ${{ inputs.working-directory }}/${{ inputs.coverage-file }}
+          slug: ${{ github.repository }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+
+  e2e:
+    name: Browser tests
+    if: inputs.browser-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - *checkout
+      - *setup-php
+      - *prepare-env
+      - *composer-cache-dir
+      - *composer-cache
+      - *composer-install
+      - *setup-node
+      - *npm-ci
+      - *key-generate
+
+      # Keyed on package-lock.json, which pins the Playwright version. On a cache hit
+      # `playwright install` skips the download and only installs the OS dependencies.
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles(format('{0}/package-lock.json', inputs.working-directory)) }}
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      # A leftover public/hot file makes Laravel load assets from the Vite dev server.
+      - name: Build frontend assets
+        run: |
+          rm -f public/hot
+          npm run build
+
+      - name: Browser tests
+        env:
+          BROWSER_TEST_COMMAND: ${{ inputs.browser-test-command }}
+        run: bash -c "$BROWSER_TEST_COMMAND"
+
+  ci:
+    name: CI
+    needs: [lint, test, e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check job results
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "lint: ${{ needs.lint.result }}"
+          echo "test: ${{ needs.test.result }}"
+          echo "e2e:  ${{ needs.e2e.result }}"
+          case " $RESULTS " in
+            *" failure "*|*" cancelled "*)
+              echo "::error::At least one job failed or was cancelled."
+              exit 1
+              ;;
+          esac

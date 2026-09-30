@@ -1,0 +1,7 @@
+{
+    "name": "SciFY Node CI",
+    "description": "Lint, type checks, unit tests, build and optional Playwright tests through the shared scify/.github workflow.",
+    "iconName": "octicon check-circle",
+    "categories": ["JavaScript", "TypeScript", "Continuous integration"],
+    "filePatterns": ["package.json$"]
+}
