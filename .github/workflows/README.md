@@ -311,7 +311,11 @@ npm-only and PHP-only repositories.
 | `allowed-dev-scripts` | `''` (no scripts allowed) | `.claude/hooks/*.sh` (one glob per line; `*` also matches `/`) |
 
 Run it on pull requests and once a week. The weekly run finds new advisories
-for dependencies that did not change:
+for dependencies that did not change.
+
+In a public repository, GitHub disables scheduled workflows after 60 days
+without repository activity, and it sends only an email. After a quiet period,
+check the **Actions** tab and enable the workflow again:
 
 ```yaml
 # .github/workflows/security.yml in your repository
@@ -352,6 +356,7 @@ jobs:
 | Browser tests also run in `Backend tests` (Laravel) | Exclude the browser suite in `test-command`, for example `vendor/bin/pest --exclude-testsuite=Browser`. |
 | `Environment files are committed to the repository` | A real env file, such as `.env` or `.env.production`, is committed. Remove it and rotate its secrets. A template must end in `.example`, `.dist`, `.sample`, `.template`, `.tpl`, `.j2`, `.jinja` or `.jinja2`. |
 | `Found 1 abandoned package` fails the `Dependency audit` job | The caller sets `composer-abandoned: fail`. Replace the package, or set `composer-abandoned: report`. |
+| The weekly security run stopped | GitHub disables scheduled workflows in a public repository after 60 days without activity. Open the workflow in the **Actions** tab and click **Enable workflow**. |
 | `Script files found in dev tool directories` | A script file is in `.vscode`, `.claude`, `.cursor` or `.idea`. Remove it, or review it and add it to `allowed-dev-scripts`. |
 | PHPStan or Rector re-analyse every file on each run | `analysis-cache-paths` does not match `tmpDir` in `phpstan.neon` or `cacheDirectory` in `rector.php`. |
 

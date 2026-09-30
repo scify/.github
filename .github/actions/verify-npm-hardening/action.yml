@@ -4,9 +4,14 @@
 # Usage:
 #
 #   steps:
-#     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-#     - uses: ./.github/actions/verify-npm-hardening
+#     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+#       with:
+#         persist-credentials: false
+#     - uses: scify/.github/.github/actions/verify-npm-hardening@<commit-sha> # v0.1
 #     - run: npm ci
+#
+# In a SciFY repository, call the reusable security.yml instead. It runs this
+# action. The organisation requires actions pinned by full commit SHA.
 #
 # Inputs:
 #   working-directory (optional, default: .)
@@ -18,134 +23,134 @@ name: Verify npm supply chain hardening
 description: Checks .npmrc settings and lockfile presence before npm ci
 
 inputs:
-    working-directory:
-        description: 'Folder that holds package.json, relative to the repository root. Example: ., frontend'
-        required: false
-        default: .
-    min-age:
-        description: Minimum acceptable min-release-age value in days
-        required: false
-        default: '7'
+  working-directory:
+    description: 'Folder that holds package.json, relative to the repository root. Example: ., frontend'
+    required: false
+    default: .
+  min-age:
+    description: Minimum acceptable min-release-age value in days
+    required: false
+    default: '7'
 
 runs:
-    using: composite
-    steps:
-        - name: Check required files
-          shell: bash
-          working-directory: ${{ inputs.working-directory }}
-          run: |
-              errors=0
+  using: composite
+  steps:
+    - name: Check required files
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        errors=0
 
-              if [ ! -f .npmrc ]; then
-                echo "::error::.npmrc is missing. See .github/actions/verify-npm-hardening/README.md for setup instructions."
-                errors=$((errors + 1))
-              fi
+        if [ ! -f .npmrc ]; then
+          echo "::error::.npmrc is missing. See .github/actions/verify-npm-hardening/README.md for setup instructions."
+          errors=$((errors + 1))
+        fi
 
-              if [ ! -f package-lock.json ]; then
-                echo "::error::package-lock.json is missing. Run npm install locally, commit the lockfile, and push."
-                errors=$((errors + 1))
-              fi
+        if [ ! -f package-lock.json ]; then
+          echo "::error::package-lock.json is missing. Run npm install locally, commit the lockfile, and push."
+          errors=$((errors + 1))
+        fi
 
-              if [ "$errors" -gt 0 ]; then
-                exit 1
-              fi
+        if [ "$errors" -gt 0 ]; then
+          exit 1
+        fi
 
-              echo "Required files present: .npmrc, package-lock.json"
+        echo "Required files present: .npmrc, package-lock.json"
 
-        - name: Verify .npmrc hardening settings
-          shell: bash
-          working-directory: ${{ inputs.working-directory }}
-          env:
-              MIN_AGE: ${{ inputs.min-age }}
-          run: |
-              if ! [ "$MIN_AGE" -ge 7 ] 2>/dev/null; then
-                echo "::error::Invalid min-age input: '${MIN_AGE}'. Must be a number >= 7."
-                exit 1
-              fi
+    - name: Verify .npmrc hardening settings
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        MIN_AGE: ${{ inputs.min-age }}
+      run: |
+        if ! [ "$MIN_AGE" -ge 7 ] 2>/dev/null; then
+          echo "::error::Invalid min-age input: '${MIN_AGE}'. Must be a number >= 7."
+          exit 1
+        fi
 
-              errors=0
+        errors=0
 
-              if ! grep -q '^ignore-scripts=true$' .npmrc; then
-                echo "::error::Missing .npmrc setting: ignore-scripts=true"
-                errors=$((errors + 1))
-              fi
+        if ! grep -q '^ignore-scripts=true$' .npmrc; then
+          echo "::error::Missing .npmrc setting: ignore-scripts=true"
+          errors=$((errors + 1))
+        fi
 
-              if ! grep -q '^engine-strict=true$' .npmrc; then
-                echo "::error::Missing .npmrc setting: engine-strict=true"
-                errors=$((errors + 1))
-              fi
+        if ! grep -q '^engine-strict=true$' .npmrc; then
+          echo "::error::Missing .npmrc setting: engine-strict=true"
+          errors=$((errors + 1))
+        fi
 
-              # grep exits 1 when the setting is missing. `|| true` keeps
-              # `bash -e -o pipefail` running, so the error below is printed.
-              age=$(grep '^min-release-age=' .npmrc | cut -d= -f2 || true)
-              if ! [ "$age" -ge "$MIN_AGE" ] 2>/dev/null; then
-                echo "::error::Missing or invalid .npmrc setting: min-release-age must be a number >= ${MIN_AGE}"
-                errors=$((errors + 1))
-              fi
+        # grep exits 1 when the setting is missing. `|| true` keeps
+        # `bash -e -o pipefail` running, so the error below is printed.
+        age=$(grep '^min-release-age=' .npmrc | cut -d= -f2 || true)
+        if ! [ "$age" -ge "$MIN_AGE" ] 2>/dev/null; then
+          echo "::error::Missing or invalid .npmrc setting: min-release-age must be a number >= ${MIN_AGE}"
+          errors=$((errors + 1))
+        fi
 
-              if [ "$errors" -gt 0 ]; then
-                echo "::error::Supply chain hardening check failed. Do not remove these settings."
-                exit 1
-              fi
+        if [ "$errors" -gt 0 ]; then
+          echo "::error::Supply chain hardening check failed. Do not remove these settings."
+          exit 1
+        fi
 
-              echo "Settings verified: ignore-scripts, engine-strict, min-release-age=${age} days"
+        echo "Settings verified: ignore-scripts, engine-strict, min-release-age=${age} days"
 
-        - name: Check for non-registry dependencies in package.json
-          shell: bash
-          working-directory: ${{ inputs.working-directory }}
-          run: |
-              # Git-hosted and URL-based dependencies bypass min-release-age
-              # entirely because they are not fetched from the npm registry.
-              git_deps=$(node -p "
-                const pkg = JSON.parse(require('fs').readFileSync('package.json', 'utf8'));
-                const fields = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
-                const hits = [];
-                fields.forEach(f => {
-                  const deps = pkg[f] || {};
-                  Object.entries(deps).forEach(([name, spec]) => {
-                    // npm: aliases (npm:@scope/pkg@1.0.0) still resolve through the registry.
-                    if (spec.startsWith('npm:')) return;
-                    if (/^(git[+:]|github:|https?:|file:)/.test(spec) || spec.includes('/') && !spec.startsWith('@'))
-                      hits.push(f + ' | ' + name + ': ' + spec);
-                  });
-                });
-                hits.length ? hits.join('\n') : '';
-              ")
+    - name: Check for non-registry dependencies in package.json
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        # Git-hosted and URL-based dependencies bypass min-release-age
+        # entirely because they are not fetched from the npm registry.
+        git_deps=$(node -p "
+          const pkg = JSON.parse(require('fs').readFileSync('package.json', 'utf8'));
+          const fields = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
+          const hits = [];
+          fields.forEach(f => {
+            const deps = pkg[f] || {};
+            Object.entries(deps).forEach(([name, spec]) => {
+              // npm: aliases (npm:@scope/pkg@1.0.0) still resolve through the registry.
+              if (spec.startsWith('npm:')) return;
+              if (/^(git[+:]|github:|https?:|file:)/.test(spec) || spec.includes('/') && !spec.startsWith('@'))
+                hits.push(f + ' | ' + name + ': ' + spec);
+            });
+          });
+          hits.length ? hits.join('\n') : '';
+        ")
 
-              if [ -n "$git_deps" ]; then
-                echo "::error::Non-registry dependencies detected. These bypass min-release-age:"
-                echo "$git_deps" | while IFS= read -r line; do
-                  echo "::error::  $line"
-                done
-                exit 1
-              fi
+        if [ -n "$git_deps" ]; then
+          echo "::error::Non-registry dependencies detected. These bypass min-release-age:"
+          echo "$git_deps" | while IFS= read -r line; do
+            echo "::error::  $line"
+          done
+          exit 1
+        fi
 
-              echo "All package.json dependencies use the npm registry."
+        echo "All package.json dependencies use the npm registry."
 
-        - name: Check for non-registry URLs in lockfile
-          shell: bash
-          working-directory: ${{ inputs.working-directory }}
-          run: |
-              # A tampered lockfile could resolve packages to non-registry
-              # sources even if package.json looks clean.
-              non_registry=$(node -p "
-                const lock = JSON.parse(require('fs').readFileSync('package-lock.json', 'utf8'));
-                const packages = lock.packages || {};
-                const hits = [];
-                Object.entries(packages).forEach(([path, meta]) => {
-                  const r = meta.resolved || '';
-                  if (r && !/^https?:\/\/registry\.npmjs\.org\//.test(r) && !/^https?:\/\/registry\.npm\./.test(r) && path !== '')
-                    hits.push(path + ' -> ' + r);
-                });
-                hits.length ? hits.join('\n') : '';
-              ")
+    - name: Check for non-registry URLs in lockfile
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        # A tampered lockfile could resolve packages to non-registry
+        # sources even if package.json looks clean.
+        non_registry=$(node -p "
+          const lock = JSON.parse(require('fs').readFileSync('package-lock.json', 'utf8'));
+          const packages = lock.packages || {};
+          const hits = [];
+          Object.entries(packages).forEach(([path, meta]) => {
+            const r = meta.resolved || '';
+            if (r && !/^https?:\/\/registry\.npmjs\.org\//.test(r) && !/^https?:\/\/registry\.npm\./.test(r) && path !== '')
+              hits.push(path + ' -> ' + r);
+          });
+          hits.length ? hits.join('\n') : '';
+        ")
 
-              if [ -n "$non_registry" ]; then
-                echo "::error::Lockfile contains entries resolved outside the npm registry:"
-                echo "$non_registry" | while IFS= read -r line; do
-                  echo "::error::  $line"
-                done
-                exit 1
-              fi
+        if [ -n "$non_registry" ]; then
+          echo "::error::Lockfile contains entries resolved outside the npm registry:"
+          echo "$non_registry" | while IFS= read -r line; do
+            echo "::error::  $line"
+          done
+          exit 1
+        fi
 
-              echo "All lockfile entries resolve to the npm registry."
+        echo "All lockfile entries resolve to the npm registry."
