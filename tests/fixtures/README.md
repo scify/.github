@@ -2,8 +2,9 @@
 
 Sample projects for the CI of this repository. No other repository uses them.
 
-`.github/workflows/self-check.yml` calls `laravel-ci.yml` and `node-ci.yml` by
-local path, with `working-directory` set to a folder here. A pull request
+`.github/workflows/self-check.yml` calls `laravel-ci.yml`, `node-ci.yml` and
+`security.yml` by local path, with `working-directory` set to a folder here. It
+also runs the composite actions against these folders. A pull request
 therefore runs its own workflow changes against a real project before any
 caller receives them. actionlint checks the syntax. These runs catch the
 runtime errors that actionlint cannot see, such as wrong paths or a wrong step
@@ -12,7 +13,9 @@ order.
 | Folder | Contents | Smoke-test jobs |
 | --- | --- | --- |
 | `laravel/` | The `laravel/laravel` skeleton, with `pint.json` and `.nvmrc` added | `laravel-defaults`, `laravel-commands` |
-| `node/` | A project without dependencies, with `lint`, `type-check`, `test` and `build` scripts | `node-defaults`, `node-commands` |
+| `node/` | A project without dependencies, with `lint`, `type-check`, `test` and `build` scripts | `node-defaults`, `node-commands`, `security-actions` |
+| `dev-configs/` | A `.claude` hook script and editor settings | `security-actions` |
+| `security/` | `composer.lock` and `package-lock.json` without dependencies, a hardened `.npmrc`, and a Jinja `.env` template | `security-fixture` |
 
 ## Refresh the Laravel fixture
 

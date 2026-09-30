@@ -1,0 +1,7 @@
+{
+    "name": "scify/security-fixture",
+    "description": "Fixture for the security workflow self-check",
+    "type": "project",
+    "license": "Apache-2.0",
+    "require": {}
+}

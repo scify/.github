@@ -9,6 +9,8 @@
 #     - run: npm ci
 #
 # Inputs:
+#   working-directory (optional, default: .)
+#     Folder that holds package.json and .npmrc.
 #   min-age (optional, default: 7)
 #     Minimum acceptable min-release-age value in days. Must be >= 7.
 
@@ -16,6 +18,10 @@ name: Verify npm supply chain hardening
 description: Checks .npmrc settings and lockfile presence before npm ci
 
 inputs:
+    working-directory:
+        description: 'Folder that holds package.json, relative to the repository root. Example: ., frontend'
+        required: false
+        default: .
     min-age:
         description: Minimum acceptable min-release-age value in days
         required: false
@@ -26,6 +32,7 @@ runs:
     steps:
         - name: Check required files
           shell: bash
+          working-directory: ${{ inputs.working-directory }}
           run: |
               errors=0
 
@@ -47,6 +54,7 @@ runs:
 
         - name: Verify .npmrc hardening settings
           shell: bash
+          working-directory: ${{ inputs.working-directory }}
           env:
               MIN_AGE: ${{ inputs.min-age }}
           run: |
@@ -84,6 +92,7 @@ runs:
 
         - name: Check for non-registry dependencies in package.json
           shell: bash
+          working-directory: ${{ inputs.working-directory }}
           run: |
               # Git-hosted and URL-based dependencies bypass min-release-age
               # entirely because they are not fetched from the npm registry.
@@ -115,6 +124,7 @@ runs:
 
         - name: Check for non-registry URLs in lockfile
           shell: bash
+          working-directory: ${{ inputs.working-directory }}
           run: |
               # A tampered lockfile could resolve packages to non-registry
               # sources even if package.json looks clean.

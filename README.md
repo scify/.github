@@ -71,21 +71,31 @@ template does not reach existing copies. Re-run the command to pick it up.
 
 ### Versioning
 
-This repository is work in progress. Releases are tagged `v0.x` and callers
-pin to the current one, `v0.1`. Any `v0.x` release may change inputs or
-defaults. When the workflows have run in real repositories for a while, `v1`
-becomes the first stable tag and moves forward only for backwards-compatible
-fixes.
+This repository is work in progress. Releases follow the usual GitHub Actions
+convention:
 
-To publish a new release:
+- Each release has its own tag, for example `v0.1.1`. It never moves.
+- The short tag, for example `v0.1`, moves to the latest release of that line.
+  Callers pin to it and receive fixes without a change.
+- Any `v0.x` line may change inputs or defaults. A change that breaks callers
+  starts a new line, for example `v0.2`.
 
-1. Update every `@v0.x` reference in the documentation and comments to the new
-   tag. The self-check fails when they differ.
-2. Tag and push:
+When the workflows have run in real repositories for a while, `v1` becomes the
+first stable line.
+
+To publish a fix release on the `v0.1` line:
+
+1. Merge the fix to `main` and wait for a green Self-check.
+2. Tag the release and move the short tag:
 
    ```bash
-   git tag v0.2 && git push origin v0.2
+   git tag -a v0.1.1 -m v0.1.1 origin/main && git push origin v0.1.1
+   git tag -f -a v0.1 -m v0.1 origin/main && git push -f origin v0.1
+   gh release create v0.1.1 --title v0.1.1 --notes "..."
    ```
+
+To start a new line, update every `@v0.x` reference in the documentation and
+comments to the new tag first. The self-check fails when they differ.
 
 ### Composite actions and the release tag
 

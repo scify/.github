@@ -296,13 +296,14 @@ npm-only and PHP-only repositories.
 
 | Job | What it checks |
 | --- | --- |
-| `Secrets` | Committed `.env` files, and Gitleaks over the full git history |
+| `Secrets` | Committed `.env` files anywhere in the repository, and Gitleaks over the full git history. Examples, `.env.testing`, `.env.ci` and templates (`.dist`, `.sample`, `.template`, `.tpl`, `.j2`, `.jinja`, `.jinja2`) are allowed |
 | `Dev tool configs` | Script files and suspicious commands in `.vscode`, `.claude`, `.cursor` and `.idea`. See [`scan-dev-configs`](../actions/scan-dev-configs/README.md) |
 | `npm supply chain hardening` | `.npmrc` settings and lockfile. See [`verify-npm-hardening`](../actions/verify-npm-hardening/README.md) |
-| `Dependency audit` | `composer audit` and `npm audit` against the lock files |
+| `Dependency audit` | `composer audit --locked` and `npm audit` against the lock files. No install is needed |
 
 | Input | Default | Example values |
 | --- | --- | --- |
+| `working-directory` | `.` | `frontend`, `apps/web`. The npm hardening and audit checks run there |
 | `php-version` | `'8.4'` | `'8.3'` |
 | `npm-audit-level` | `high` | `low`, `moderate`, `critical` |
 | `strict-dev-configs` | `false` (warn only) | `true` (fail on suspicious commands) |
@@ -348,6 +349,7 @@ jobs:
 | `Codecov` fails on your own pull requests | The `CODECOV_TOKEN` secret is missing or not passed under `secrets:`. Pull requests from forks get no secrets, so there the upload failure does not fail the job. |
 | `Environment file '...' not found` (Laravel) | Your repository has no `.env.testing` and no `.env.example`, or `env-file` points to a missing file. |
 | Browser tests also run in `Backend tests` (Laravel) | Exclude the browser suite in `test-command`, for example `vendor/bin/pest --exclude-testsuite=Browser`. |
+| `Environment files are committed to the repository` | A real env file, such as `.env` or `.env.production`, is committed. Remove it and rotate its secrets. A template must end in `.example`, `.dist`, `.sample`, `.template`, `.tpl`, `.j2`, `.jinja` or `.jinja2`. |
 | `Script files found in dev tool directories` | A script file is in `.vscode`, `.claude`, `.cursor` or `.idea`. Remove it, or review it and add it to `allowed-dev-scripts`. |
 | PHPStan or Rector re-analyse every file on each run | `analysis-cache-paths` does not match `tmpDir` in `phpstan.neon` or `cacheDirectory` in `rector.php`. |
 

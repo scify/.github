@@ -88,6 +88,7 @@ steps:
 | Name      | Default | Description                                                       |
 |-----------|---------|-------------------------------------------------------------------|
 | `min-age` | `7`     | Minimum acceptable `min-release-age` value in days. Must be >= 7. |
+| `working-directory` | `.` | Folder that holds `package.json` and `.npmrc`, relative to the repository root. Example: `frontend` |
 
 ```yaml
 - uses: ./.github/actions/verify-npm-hardening
