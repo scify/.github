@@ -32,6 +32,10 @@ on:
         description: PHP version used to run `composer audit`.
         type: string
         default: '8.4'
+      composer-abandoned:
+        description: 'What composer audit does with abandoned packages. One of: ignore, report, fail'
+        type: string
+        default: report
       npm-audit-level:
         description: Lowest npm advisory severity that fails the audit (low, moderate, high, critical).
         type: string
@@ -183,9 +187,13 @@ jobs:
           tools: composer:v2
 
       # --locked reads composer.lock, so no `composer install` is needed.
+      # Abandoned packages only get reported by default: a transitive package
+      # without a replacement is not something a pull request can fix.
       - name: Composer audit
         if: hashFiles(format('{0}/composer.lock', inputs.working-directory)) != ''
-        run: composer audit --locked --format=table
+        env:
+          ABANDONED: ${{ inputs.composer-abandoned }}
+        run: composer audit --locked --abandoned="$ABANDONED" --format=table
 
       - name: npm audit
         if: hashFiles(format('{0}/package-lock.json', inputs.working-directory)) != ''

@@ -305,6 +305,7 @@ npm-only and PHP-only repositories.
 | --- | --- | --- |
 | `working-directory` | `.` | `frontend`, `apps/web`. The npm hardening and audit checks run there |
 | `php-version` | `'8.4'` | `'8.3'` |
+| `composer-abandoned` | `report` (list, do not fail) | `ignore`, `fail` |
 | `npm-audit-level` | `high` | `low`, `moderate`, `critical` |
 | `strict-dev-configs` | `false` (warn only) | `true` (fail on suspicious commands) |
 | `allowed-dev-scripts` | `''` (no scripts allowed) | `.claude/hooks/*.sh` (one glob per line; `*` also matches `/`) |
@@ -350,6 +351,7 @@ jobs:
 | `Environment file '...' not found` (Laravel) | Your repository has no `.env.testing` and no `.env.example`, or `env-file` points to a missing file. |
 | Browser tests also run in `Backend tests` (Laravel) | Exclude the browser suite in `test-command`, for example `vendor/bin/pest --exclude-testsuite=Browser`. |
 | `Environment files are committed to the repository` | A real env file, such as `.env` or `.env.production`, is committed. Remove it and rotate its secrets. A template must end in `.example`, `.dist`, `.sample`, `.template`, `.tpl`, `.j2`, `.jinja` or `.jinja2`. |
+| `Found 1 abandoned package` fails the `Dependency audit` job | The caller sets `composer-abandoned: fail`. Replace the package, or set `composer-abandoned: report`. |
 | `Script files found in dev tool directories` | A script file is in `.vscode`, `.claude`, `.cursor` or `.idea`. Remove it, or review it and add it to `allowed-dev-scripts`. |
 | PHPStan or Rector re-analyse every file on each run | `analysis-cache-paths` does not match `tmpDir` in `phpstan.neon` or `cacheDirectory` in `rector.php`. |
 
