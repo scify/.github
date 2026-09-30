@@ -67,16 +67,21 @@ steps:
 
 **Organisation-wide usage** (recommended):
 
-The action is published from the public `scify/.github` repository. Reference it by the `v1` tag:
+In a SciFY repository, call the reusable `security.yml` workflow. It runs this
+action with the other security checks. See the
+[workflow guide](../../workflows/README.md#security).
+
+To use the action on its own, pin it to a full commit SHA. The organisation
+requires this for every action, including actions from `scify/.github`. A tag
+such as `@v0.1` fails. Get the SHA of a release with
+`git ls-remote https://github.com/scify/.github refs/tags/v0.1`:
 
 ```yaml
 steps:
   - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-  - uses: scify/.github/.github/actions/verify-npm-hardening@v0.1
+  - uses: scify/.github/.github/actions/verify-npm-hardening@<commit-sha> # v0.1
   - run: npm ci
 ```
-
-The reusable `security.yml` workflow in the same repository already runs this action. Call that workflow instead when you want the full set of checks.
 
 ## Inputs
 
