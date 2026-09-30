@@ -1,0 +1,196 @@
+# CI for this repository. Not a reusable workflow: do not call it.
+#
+# Checks every workflow, composite action, template and the workflow guide:
+#   - actionlint (with shellcheck) on .github/workflows/*.yml and the templates
+#   - shellcheck on the bash steps of .github/actions/*/action.yml
+#   - every reusable workflow input and default is in .github/workflows/README.md
+#   - every workflow template .properties.json file parses
+#   - every internal `scify/.github/...@vX` reference uses the same release tag
+#   - the composite actions pass on good fixtures and fail on bad ones
+#   - security.yml runs on this repository (it loads its actions by job.workflow_sha)
+#   - smoke tests: laravel-ci.yml and node-ci.yml run against the fixture
+#     projects in tests/fixtures/, once with defaults and once with commands
+#
+# The smoke tests call the workflows by local path, so a pull request tests the
+# workflow code on its own branch.
+name: Self-check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install actionlint and shellcheck
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+          SHELLCHECK_VERSION: 0.11.0
+          SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+        run: |
+          bin="$RUNNER_TEMP/bin"
+          mkdir -p "$bin"
+          cd "$RUNNER_TEMP"
+
+          curl -sSfL -o actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  actionlint.tar.gz" | sha256sum --check
+          tar -xzf actionlint.tar.gz -C "$bin" actionlint
+
+          curl -sSfL -o shellcheck.tar.xz \
+            "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          echo "${SHELLCHECK_SHA256}  shellcheck.tar.xz" | sha256sum --check
+          tar -xJf shellcheck.tar.xz --strip-components=1 -C "$bin" "shellcheck-v${SHELLCHECK_VERSION}/shellcheck"
+
+          echo "$bin" >> "$GITHUB_PATH"
+
+      - name: Install PyYAML
+        run: python3 -c 'import yaml' 2>/dev/null || sudo apt-get install -y --no-install-recommends python3-yaml
+
+      - name: actionlint on workflows
+        run: actionlint -color .github/workflows/*.yml
+
+      # The templates contain the `$default-branch` placeholder, which only the
+      # GitHub UI replaces. Lint a copy with the placeholder filled in.
+      - name: actionlint on workflow templates
+        run: |
+          out="$RUNNER_TEMP/templates/.github/workflows"
+          mkdir -p "$out"
+          for file in workflow-templates/*.yml; do
+            # `$default-branch` is literal text, not a shell variable.
+            # shellcheck disable=SC2016
+            sed 's/\$default-branch/main/' "$file" > "$out/$(basename "$file")"
+          done
+          actionlint -color "$out"/*.yml
+
+      - name: shellcheck on composite actions
+        run: python3 scripts/shellcheck-actions.py
+
+      - name: Workflow guide documents every input
+        run: python3 scripts/check-workflow-docs.py
+
+      - name: Template properties parse
+        run: |
+          for file in workflow-templates/*.properties.json; do
+            python3 -m json.tool "$file" > /dev/null && echo "ok  $file"
+          done
+
+      # security.yml calls the composite actions by tag, and the docs show the
+      # tag in every example. A release must move all of them together.
+      - name: Internal references use one release tag
+        run: |
+          tags=$(grep -rhoE --exclude-dir=.git --exclude-dir=fixtures \
+              'scify/\.github/\.github/(workflows|actions)/[A-Za-z0-9_-][A-Za-z0-9/_.-]*@v[0-9]+(\.[0-9]+)*|raw\.githubusercontent\.com/scify/\.github/v[0-9]+(\.[0-9]+)*' . \
+            | grep -oE 'v[0-9]+(\.[0-9]+)*$' | sort | uniq -c)
+          echo "$tags"
+          if [ "$(echo "$tags" | wc -l)" -ne 1 ]; then
+            echo "::error::Internal references use more than one tag. Update them all to the release tag."
+            exit 1
+          fi
+
+  security-actions:
+    name: Security actions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Both actions check the workspace root. This repository has no dev tool
+      # folders or npm files there, so the fixtures are copied in.
+      - name: Copy fixtures to the workspace root
+        run: |
+          cp -r tests/fixtures/dev-configs/. .
+          cp tests/fixtures/node/package.json tests/fixtures/node/package-lock.json tests/fixtures/node/.npmrc .
+
+      - name: scan-dev-configs passes with the hook allowed
+        uses: ./.github/actions/scan-dev-configs
+        with:
+          allowed-scripts: .claude/hooks/*.sh
+          strict: 'true'
+
+      - name: scan-dev-configs without the allowlist
+        id: scan-blocked
+        continue-on-error: true
+        uses: ./.github/actions/scan-dev-configs
+
+      - name: verify-npm-hardening passes with the hardened .npmrc
+        uses: ./.github/actions/verify-npm-hardening
+
+      - name: Remove min-release-age from .npmrc
+        run: sed -i '/^min-release-age=/d' .npmrc
+
+      - name: verify-npm-hardening without min-release-age
+        id: npm-weak
+        continue-on-error: true
+        uses: ./.github/actions/verify-npm-hardening
+
+      - name: The broken fixtures failed
+        env:
+          SCAN: ${{ steps.scan-blocked.outcome }}
+          NPM: ${{ steps.npm-weak.outcome }}
+        run: |
+          echo "scan-dev-configs without allowlist: $SCAN"
+          echo "verify-npm-hardening without min-release-age: $NPM"
+          if [ "$SCAN" != failure ] || [ "$NPM" != failure ]; then
+            echo "::error::An action passed on a fixture that it must reject."
+            exit 1
+          fi
+
+  security:
+    name: Security workflow on this repository
+    uses: ./.github/workflows/security.yml
+
+  laravel-defaults:
+    name: Laravel CI, defaults
+    uses: ./.github/workflows/laravel-ci.yml
+    with:
+      working-directory: tests/fixtures/laravel
+      node-version-file: tests/fixtures/laravel/.nvmrc
+
+  laravel-commands:
+    name: Laravel CI, commands, no frontend
+    uses: ./.github/workflows/laravel-ci.yml
+    with:
+      working-directory: tests/fixtures/laravel
+      frontend: false
+      lint-command: vendor/bin/pint --test && php artisan about --only=environment
+      types-command: php -l app/Models/User.php
+      test-command: php artisan test --testsuite=Unit
+
+  node-defaults:
+    name: Node CI, defaults
+    uses: ./.github/workflows/node-ci.yml
+    with:
+      working-directory: tests/fixtures/node
+      node-version-file: tests/fixtures/node/.nvmrc
+
+  node-commands:
+    name: Node CI, commands
+    uses: ./.github/workflows/node-ci.yml
+    with:
+      working-directory: tests/fixtures/node
+      node-version: '24'
+      lint-command: node --check src/greet.js
+      types-command: node --check build.js
+      test-command: node --test 'test/*.test.js'
+      build-command: npm run build && test -f dist/greet.js

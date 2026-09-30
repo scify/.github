@@ -1,0 +1,11 @@
+{
+    "name": "scify-node-ci-fixture",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "lint": "node --check src/greet.js && node --check build.js",
+        "type-check": "node --check test/greet.test.js",
+        "test": "node --test",
+        "build": "node build.js"
+    }
+}
