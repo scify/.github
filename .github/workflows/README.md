@@ -24,9 +24,11 @@ These five rules prevent the common mistakes:
    `@v0.1.4`: an exact tag never moves, so the repository stops receiving fixes.
 3. **Replace only CI and security workflows.** Keep every other workflow, for
    example deployment, Dependabot auto-merge or release workflows.
-4. **Do not guess inputs.** Read the repository's own configuration first: the
-   database in `phpunit.xml`, the scripts in `composer.json` and
-   `package.json`. Leave an input commented out when its default is right.
+4. **Every input you set needs evidence.** Find a file and a line in the
+   repository that justify the value: the database in `phpunit.xml`, a script
+   in `composer.json` or `package.json`, a step in the old workflow. With no
+   evidence, leave the input commented out, so the default applies. Do not copy
+   a recipe from this guide without that evidence.
 5. **Verify.** Run the repository's own checks, open a pull request, and read
    the job logs. The required check becomes `ci / CI`.
 
@@ -150,8 +152,10 @@ workflows. It applies to people and to AI coding agents.
    Replace `$default-branch` with the default branch, for example `main`.
 4. **Map each existing command to an input.** Keep the repository's own
    commands where they exist, for example `lint-command: composer check`. Leave
-   an input commented out when its default already does the same thing. Do not
-   guess: for example, `php-extensions` follows the database in `phpunit.xml`.
+   an input commented out when its default already does the same thing. Set an
+   input only with evidence (a file and a line): for example, `browser-tests`
+   needs a browser test suite in `phpunit.xml`, and `php-extensions` follows
+   the database that the tests use.
 5. **Remove only what the shared workflows replace.** Delete the old CI and
    security workflow files and every local copy of `scan-dev-configs` or
    `verify-npm-hardening`. Keep every other workflow, for example deployment,
@@ -159,6 +163,9 @@ workflows. It applies to people and to AI coding agents.
 6. **Run the repository's own checks on the new files.** Run its formatters and
    linters, for example `npm run check` or `composer check`, and
    `actionlint .github/workflows/*.yml`.
+   The templates run on pushes to the default branch and on pull requests.
+   If the old workflow ran on every push to every branch, tell the team: a
+   branch without a pull request no longer gets CI.
 7. **Open a pull request.** Every `ci / ...` and `security / ...` check must
    pass. Open the job logs and confirm that the expected steps ran.
 8. **Update the required check.** In the branch ruleset or branch protection,
@@ -179,6 +186,8 @@ workflows. It applies to people and to AI coding agents.
 | Browser tests in `test-command` | They run in `Backend tests`, which has no browser, and fail | Exclude the browser suite, for example `--exclude-testsuite=Browser` |
 | The required check still has the old name | Every new pull request waits for a check that never runs; Dependabot auto-merge stops | Require `ci / CI` (step 8) |
 | A green job with nothing checked | For example "No package.json, skipping" | Read the job logs (step 7) |
+| The tests need MySQL or PostgreSQL | Every job fails: the workflow has no database service | See [Environment and database](#environment-and-database) |
+| `storage/framework/views` is missing in a clean checkout | Tests fail in CI only with "Please provide a valid cache path.": your local folder exists, but git does not track it | Commit the folder with a `.gitignore` that ignores everything except itself, as the other `storage/` folders do |
 | Old local copies of the actions stay | They drift and keep bugs that the shared copies fixed | Delete them (step 5) |
 
 ## Laravel CI
@@ -248,6 +257,20 @@ The database comes from your `phpunit.xml` and `.env` file. The Laravel default,
 SQLite in memory, needs nothing else. The workflow has no MySQL or PostgreSQL
 service container.
 
+If the tests need MySQL or PostgreSQL, choose one of these before you adopt the
+workflow:
+
+- **Move the tests to SQLite in memory.** Set `DB_CONNECTION` and `DB_DATABASE`
+  in `phpunit.xml`. Use `RefreshDatabase`, and seeding (`protected $seed =
+  true;` in `TestCase`) when the tests expect reference data. Tests of
+  database-specific SQL, such as `DATE_FORMAT`, can fail on SQLite.
+- **Keep the old CI** for the tests, and add only `security.yml`.
+
+Every job also runs `php artisan key:generate`, which boots the application. If
+the application reads the database while it boots (for example `Schema::hasTable()`
+in a service provider), every job fails without a database. Commit a
+`.env.testing` that uses SQLite, so that the boot works.
+
 ### Laravel recipes
 
 Minimal call, for a standard Laravel application with Pint, PHPStan and Vite:
@@ -268,7 +291,11 @@ jobs:
       frontend: false
 ```
 
-Composer scripts for the checks, Pest with coverage, and browser tests:
+Composer scripts for the checks, Pest with coverage, and browser tests. Use
+this recipe only when the repository has each of these: the Composer scripts, a
+Codecov token, and a Pest browser suite (`pestphp/pest-plugin-browser` and a
+`Browser` test suite). Make sure that `composer check` does not already run
+`check:types`, or PHPStan runs twice:
 
 ```yaml
 jobs:
