@@ -6,6 +6,9 @@ This repository is public. GitHub requires that for the default files, the profi
 README and the workflow templates to take effect. Do not commit secrets, hostnames
 or internal URLs here.
 
+**Using an AI coding agent?** Point it to [AGENTS.md](AGENTS.md). It tells the
+agent how to add these workflows to a repository and how to change this one.
+
 ## Scope
 
 This repository holds only content that is safe to publish:

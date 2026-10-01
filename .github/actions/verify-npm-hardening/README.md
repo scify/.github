@@ -2,35 +2,22 @@
 
 Composite GitHub Action that verifies supply chain security settings before `npm ci` runs. Catches missing or misconfigured settings before they reach production.
 
-## What it checks
+## Policy
 
-**Required files:**
+This table is the canonical SciFY npm supply chain policy. The action enforces
+every rule marked "fails". The `npm-harden` skill in the `scify-devops` Claude
+Code plugin applies the same rules to a repository.
 
-| File                | Why                                                        |
-|---------------------|------------------------------------------------------------|
-| `.npmrc`            | Contains the hardening settings below                      |
-| `package-lock.json` | Locks exact dependency versions for deterministic installs |
-
-**Required `.npmrc` settings:**
-
-| Setting               | Purpose                                                                       |
-|-----------------------|-------------------------------------------------------------------------------|
-| `ignore-scripts=true` | Blocks postinstall hooks (the main vector for npm supply chain attacks)       |
-| `engine-strict=true`  | Refuses to install on unsupported Node/npm versions                           |
-| `min-release-age=N`   | Quarantines packages published less than N days ago (requires npm >= 11.10.0) |
-
-**Non-registry dependency checks:**
-
-| Check | Purpose |
-|-------|---------|
-| Git/URL deps in `package.json` | Detects dependencies that bypass `min-release-age` (git, GitHub, HTTP, file sources) |
-| Non-registry URLs in `package-lock.json` | Detects tampered lockfiles resolving packages outside the npm registry |
-
-**Recommended (not enforced):**
-
-| Setting           | Purpose                                                       |
-|-------------------|---------------------------------------------------------------|
-| `save-exact=true` | Pins new dependencies to exact versions instead of `^` ranges |
+| # | Rule | Value | CI result | Why |
+| --- | --- | --- | --- | --- |
+| 1 | `.npmrc` is committed | file exists | fails | Holds the settings below |
+| 2 | `package-lock.json` is committed | file exists | fails | `npm ci` needs it for a deterministic install |
+| 3 | `ignore-scripts` | `true` | fails | Blocks install scripts, the main vector of npm supply chain attacks |
+| 4 | `engine-strict` | `true` | fails | Refuses to install on Node or npm versions outside `engines` |
+| 5 | `min-release-age` | a plain integer, at least 7 (days); the `min-age` input can raise the minimum | fails | Quarantines new releases. Needs npm 11.10.0 or later. `7d` is invalid and disables the protection |
+| 6 | No git, URL, GitHub or `file:` dependencies in `package.json` | none allowed; `npm:` aliases are allowed | fails | These sources bypass `min-release-age` |
+| 7 | Every `resolved` URL in `package-lock.json` points to the public npm registry | starts with `https://registry.npmjs.org/` (no other host, no `http://`) | fails | Detects a tampered lockfile |
+| 8 | `save-exact` | `true` | not checked (recommended) | New dependencies get exact versions instead of `^` ranges |
 
 ## Setup
 
