@@ -1,5 +1,9 @@
 # Reusable security workflow for SciFY repositories.
 #
+# To use it: start from workflow-templates/security.yml and pin the short tag @v0.1
+# (never an exact release such as @v0.1.4). Procedure for people and AI agents:
+# https://github.com/scify/.github/blob/main/.github/workflows/README.md#adopt-in-an-existing-repository
+#
 # Call it from a repository workflow:
 #
 #   on:

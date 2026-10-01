@@ -1,5 +1,9 @@
 # Reusable CI workflow for npm-only repositories (Vue, React, TypeScript SPAs).
 #
+# To use it: start from workflow-templates/node-ci.yml and pin the short tag @v0.1
+# (never an exact release such as @v0.1.4). Procedure for people and AI agents:
+# https://github.com/scify/.github/blob/main/.github/workflows/README.md#adopt-in-an-existing-repository
+#
 # Minimal call (every value below is a default and can be left out):
 #
 #   jobs:
