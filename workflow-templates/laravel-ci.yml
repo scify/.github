@@ -5,6 +5,8 @@
 # Each commented-out input shows its default. Uncomment a line only to change it.
 # The "e.g." comment shows other accepted values.
 # In branch protection, require the check "ci / CI".
+# No database service: the tests must run on SQLite. If they need MySQL or
+# PostgreSQL, read "Environment and database" in the guide first.
 name: CI
 
 on:
