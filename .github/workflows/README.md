@@ -13,11 +13,26 @@ application, which inputs it accepts, and how to solve common problems.
 Each workflow file also starts with a comment block that shows a full example call.
 `self-check.yml` is the CI of this repository. Do not call it.
 
-> **AI coding agents:** read [`AGENTS.md`](../../AGENTS.md) at the repository
-> root first. To add these workflows to a repository, follow
-> [Adopt in an existing repository](#adopt-in-an-existing-repository). SciFY
-> developers with the `scify-devops` Claude Code plugin can run `/ci-setup`,
-> which follows the same procedure.
+**Read this first** (people and AI coding agents). To add these workflows to a
+repository, follow [Adopt in an existing repository](#adopt-in-an-existing-repository).
+These five rules prevent the common mistakes:
+
+1. **Start from a template** in [`workflow-templates/`](../../workflow-templates).
+   It sets the triggers, `concurrency` and `permissions`. Do not write the
+   caller file from scratch.
+2. **Use the short tag `@v0.1`.** Never pin an exact release such as
+   `@v0.1.4`: an exact tag never moves, so the repository stops receiving fixes.
+3. **Replace only CI and security workflows.** Keep every other workflow, for
+   example deployment, Dependabot auto-merge or release workflows.
+4. **Do not guess inputs.** Read the repository's own configuration first: the
+   database in `phpunit.xml`, the scripts in `composer.json` and
+   `package.json`. Leave an input commented out when its default is right.
+5. **Verify.** Run the repository's own checks, open a pull request, and read
+   the job logs. The required check becomes `ci / CI`.
+
+AI coding agents: [`AGENTS.md`](../../AGENTS.md) at the repository root has
+more rules. SciFY developers with the `scify-devops` Claude Code plugin can run
+`/ci-setup`, which follows the same procedure.
 
 ## Contents
 
@@ -135,9 +150,12 @@ workflows. It applies to people and to AI coding agents.
    Replace `$default-branch` with the default branch, for example `main`.
 4. **Map each existing command to an input.** Keep the repository's own
    commands where they exist, for example `lint-command: composer check`. Leave
-   an input commented out when its default already does the same thing.
-5. **Remove what the shared workflows replace.** Delete the old workflow
-   files and every local copy of `scan-dev-configs` or `verify-npm-hardening`.
+   an input commented out when its default already does the same thing. Do not
+   guess: for example, `php-extensions` follows the database in `phpunit.xml`.
+5. **Remove only what the shared workflows replace.** Delete the old CI and
+   security workflow files and every local copy of `scan-dev-configs` or
+   `verify-npm-hardening`. Keep every other workflow, for example deployment,
+   Dependabot auto-merge or release workflows.
 6. **Run the repository's own checks on the new files.** Run its formatters and
    linters, for example `npm run check` or `composer check`, and
    `actionlint .github/workflows/*.yml`.
@@ -153,7 +171,8 @@ workflows. It applies to people and to AI coding agents.
 | Pitfall | What happens | Do this |
 | --- | --- | --- |
 | An action from `scify/.github` pinned by tag | The run fails: the organisation requires actions pinned by SHA | Call `security.yml`, which loads its actions by itself. For a direct use, pin the action by SHA |
-| A reusable workflow pinned by SHA | The repository stops receiving fixes | Use `@v0.1` |
+| A reusable workflow pinned by SHA or by an exact release such as `@v0.1.4` | The repository stops receiving fixes | Use the short tag `@v0.1` |
+| A caller file written from scratch | Missing triggers, for example no CI on pull requests | Start from the template (step 3) |
 | The repository's formatter does not run before the push | CI fails, for example Prettier on the new workflow file | Run the repository's own checks first (step 6) |
 | A commented-out input under `# with:` | Prettier moves the comment, and the uncommented input no longer sits under `with:` | Keep the extra indentation after the `#`, as in the templates: `#   input: value` |
 | Two inputs run the same tool | Double run time, for example `composer check` that already includes `check:types` | Give each input a command that does not overlap with the others |

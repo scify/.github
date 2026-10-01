@@ -15,7 +15,9 @@ in a different repository, `scify/scify-agent-tools`.
 
 ## Part 1: Use the shared workflows in another repository
 
-**Current release tag: `v0.1`.** Call every workflow with `@v0.1`.
+**Current release tag: `v0.1`.** Call every workflow with `@v0.1`. This short
+tag moves to each fix release. Never pin an exact release such as `@v0.1.4`,
+even when the release list shows it as "Latest".
 
 | Repository type | Workflows to call | Template |
 | --- | --- | --- |
@@ -40,20 +42,25 @@ gh api 'repos/scify/.github/contents/.github/workflows/README.md?ref=v0.1' \
 
 Rules that cause failures when you break them:
 
-1. **Workflows by tag, actions by SHA.** Call a reusable workflow with `@v0.1`.
+1. **Start from the template** and keep its triggers, `concurrency` and
+   `permissions`. **Replace only CI and security workflows**; keep deployment,
+   Dependabot auto-merge and other workflows. **Do not guess inputs**: read
+   `phpunit.xml`, `composer.json` and `package.json` first.
+
+2. **Workflows by tag, actions by SHA.** Call a reusable workflow with `@v0.1`.
    The organisation requires every action in a step to be pinned by full commit
    SHA, also actions from `scify/.github`. Do not call
    `scify/.github/.github/actions/<name>@v0.1`: it fails. Use `security.yml`
    instead, which runs both actions.
-2. **Run the target repository's own checks before you push.** Its formatters
+3. **Run the target repository's own checks before you push.** Its formatters
    and linters also check the new workflow files. Then run
    `actionlint .github/workflows/*.yml`.
-3. **The required check becomes `ci / CI`.** Tell the user to update the branch
+4. **The required check becomes `ci / CI`.** Tell the user to update the branch
    ruleset or branch protection. Do not change repository settings without the
    user's approval.
-4. **Read the job logs.** A green job can mean that a step was skipped, for
+5. **Read the job logs.** A green job can mean that a step was skipped, for
    example "No package.json, skipping".
-5. **Delete replaced files**: old CI or security workflows, and local copies of
+6. **Delete replaced files**: old CI or security workflows, and local copies of
    `scan-dev-configs` or `verify-npm-hardening`.
 
 The npm rules that `security.yml` enforces are in the
