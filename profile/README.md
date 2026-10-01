@@ -15,6 +15,10 @@ accessibility, education, and inclusion.
 Every public repository accepts issues and pull requests. Start with the
 organisation [contributing guide](https://github.com/scify/.github/blob/main/CONTRIBUTING.md).
 
+SciFY repositories share their CI and security checks through
+[scify/.github](https://github.com/scify/.github). AI coding agents start with
+its [AGENTS.md](https://github.com/scify/.github/blob/main/AGENTS.md).
+
 ## Contact
 
 Website: <https://www.scify.org>

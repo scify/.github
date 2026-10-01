@@ -13,9 +13,16 @@ application, which inputs it accepts, and how to solve common problems.
 Each workflow file also starts with a comment block that shows a full example call.
 `self-check.yml` is the CI of this repository. Do not call it.
 
+> **AI coding agents:** read [`AGENTS.md`](../../AGENTS.md) at the repository
+> root first. To add these workflows to a repository, follow
+> [Adopt in an existing repository](#adopt-in-an-existing-repository). SciFY
+> developers with the `scify-devops` Claude Code plugin can run `/ci-setup`,
+> which follows the same procedure.
+
 ## Contents
 
 - [How a call works](#how-a-call-works)
+- [Adopt in an existing repository](#adopt-in-an-existing-repository)
 - [Laravel CI](#laravel-ci)
 - [Node CI](#node-ci)
 - [Security](#security)
@@ -53,8 +60,14 @@ jobs:
 
 Rules that apply to every workflow here:
 
-- **Pin to a tag.** Use `@v0.1`, not `@main`. A `v0.x` release can change
-  inputs, so read the release notes before you move to a new tag.
+- **Workflows by tag, actions by SHA.** Call the reusable workflows with the
+  release tag, `@v0.1`, not `@main`. The tag moves to each fix release, so you
+  receive fixes without a change. Do not pin a workflow by SHA: you then stop
+  receiving fixes. Actions are different: the organisation requires every
+  action in a step (`steps: - uses:`) to be pinned by full commit SHA. This
+  includes actions from `scify/.github`, so
+  `scify/.github/.github/actions/<name>@v0.1` fails. A `v0.x` release can
+  change inputs, so read the release notes before you move to a new line.
 - **Your file owns the triggers.** `on:`, `concurrency:` and `permissions:` go in
   your file. The shared workflow only defines the jobs.
 - **Inputs have defaults.** Set only the inputs that you want to change. A
@@ -98,6 +111,56 @@ by hand. Replace `$default-branch` with `main`.
   or was cancelled. A skipped job counts as green. In branch protection,
   require only `ci / CI`. When you add or remove jobs later, the rule stays the
   same.
+
+## Adopt in an existing repository
+
+Use this procedure when a repository already has its own CI or security
+workflows. It applies to people and to AI coding agents.
+
+1. **Read what the repository runs today.** Read `.github/workflows/*.yml`,
+   `.github/actions/*`, the `scripts` in `composer.json` and `package.json`,
+   the test suites in `phpunit.xml`, `tmpDir` in `phpstan.neon`,
+   `cacheDirectory` in `rector.php`, and the files `.env.testing`, `.nvmrc`
+   and `.npmrc`.
+2. **Choose the workflows.** A Laravel application uses `laravel-ci.yml` and
+   `security.yml`. An npm-only application uses `node-ci.yml` and
+   `security.yml`.
+3. **Start from the template at the release tag.** For example:
+
+   ```bash
+   gh api 'repos/scify/.github/contents/workflow-templates/laravel-ci.yml?ref=v0.1' \
+     -H 'Accept: application/vnd.github.raw' > .github/workflows/ci.yml
+   ```
+
+   Replace `$default-branch` with the default branch, for example `main`.
+4. **Map each existing command to an input.** Keep the repository's own
+   commands where they exist, for example `lint-command: composer check`. Leave
+   an input commented out when its default already does the same thing.
+5. **Remove what the shared workflows replace.** Delete the old workflow
+   files and every local copy of `scan-dev-configs` or `verify-npm-hardening`.
+6. **Run the repository's own checks on the new files.** Run its formatters and
+   linters, for example `npm run check` or `composer check`, and
+   `actionlint .github/workflows/*.yml`.
+7. **Open a pull request.** Every `ci / ...` and `security / ...` check must
+   pass. Open the job logs and confirm that the expected steps ran.
+8. **Update the required check.** In the branch ruleset or branch protection,
+   require `ci / CI` instead of the old check name. Do this together with the
+   merge.
+9. **Check the first run on the default branch** after the merge.
+
+### Pitfalls
+
+| Pitfall | What happens | Do this |
+| --- | --- | --- |
+| An action from `scify/.github` pinned by tag | The run fails: the organisation requires actions pinned by SHA | Call `security.yml`, which loads its actions by itself. For a direct use, pin the action by SHA |
+| A reusable workflow pinned by SHA | The repository stops receiving fixes | Use `@v0.1` |
+| The repository's formatter does not run before the push | CI fails, for example Prettier on the new workflow file | Run the repository's own checks first (step 6) |
+| A commented-out input under `# with:` | Prettier moves the comment, and the uncommented input no longer sits under `with:` | Keep the extra indentation after the `#`, as in the templates: `#   input: value` |
+| Two inputs run the same tool | Double run time, for example `composer check` that already includes `check:types` | Give each input a command that does not overlap with the others |
+| Browser tests in `test-command` | They run in `Backend tests`, which has no browser, and fail | Exclude the browser suite, for example `--exclude-testsuite=Browser` |
+| The required check still has the old name | Every new pull request waits for a check that never runs; Dependabot auto-merge stops | Require `ci / CI` (step 8) |
+| A green job with nothing checked | For example "No package.json, skipping" | Read the job logs (step 7) |
+| Old local copies of the actions stay | They drift and keep bugs that the shared copies fixed | Delete them (step 5) |
 
 ## Laravel CI
 
