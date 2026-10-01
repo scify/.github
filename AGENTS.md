@@ -44,8 +44,13 @@ Rules that cause failures when you break them:
 
 1. **Start from the template** and keep its triggers, `concurrency` and
    `permissions`. **Replace only CI and security workflows**; keep deployment,
-   Dependabot auto-merge and other workflows. **Do not guess inputs**: read
-   `phpunit.xml`, `composer.json` and `package.json` first.
+   Dependabot auto-merge and other workflows. **Every input you set needs
+   evidence**: a file and a line in the repository, for example a test suite in
+   `phpunit.xml` or a script in `composer.json`. With no evidence, keep the
+   default. Do not copy a recipe from the guide without that evidence.
+   **The workflow has no database service**: if the tests need MySQL or
+   PostgreSQL, stop and ask the user (see the guide's "Environment and
+   database").
 
 2. **Workflows by tag, actions by SHA.** Call a reusable workflow with `@v0.1`.
    The organisation requires every action in a step to be pinned by full commit
