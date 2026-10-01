@@ -139,7 +139,9 @@ runs:
           const hits = [];
           Object.entries(packages).forEach(([path, meta]) => {
             const r = meta.resolved || '';
-            if (r && !/^https?:\/\/registry\.npmjs\.org\//.test(r) && !/^https?:\/\/registry\.npm\./.test(r) && path !== '')
+            // Only the public npm registry over HTTPS. A looser prefix such as
+            // registry.npm. would also accept registry.npm.attacker.example.
+            if (r && !/^https:\/\/registry\.npmjs\.org\//.test(r) && path !== '')
               hits.push(path + ' -> ' + r);
           });
           hits.length ? hits.join('\n') : '';
