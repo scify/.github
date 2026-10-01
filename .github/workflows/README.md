@@ -15,7 +15,7 @@ Each workflow file also starts with a comment block that shows a full example ca
 
 **Read this first** (people and AI coding agents). To add these workflows to a
 repository, follow [Adopt in an existing repository](#adopt-in-an-existing-repository).
-These five rules prevent the common mistakes:
+These six rules prevent the common mistakes:
 
 1. **Start from a template** in [`workflow-templates/`](../../workflow-templates).
    It sets the triggers, `concurrency` and `permissions`. Do not write the
@@ -28,8 +28,15 @@ These five rules prevent the common mistakes:
    repository that justify the value: the database in `phpunit.xml`, a script
    in `composer.json` or `package.json`, a step in the old workflow. With no
    evidence, leave the input commented out, so the default applies. Do not copy
-   a recipe from this guide without that evidence.
-5. **Verify.** Run the repository's own checks, open a pull request, and read
+   a recipe from this guide without that evidence. A value from the old
+   workflow is evidence only if the shared workflow gives the same
+   environment: for example, `pdo_mysql` from an old workflow with a MySQL
+   service is not.
+5. **Check the test database first.** The shared workflows start no MySQL or
+   PostgreSQL service. If the tests use one (read `phpunit.xml`, then
+   `.env.testing` or `.env.example`), this is a blocker: see
+   [Environment and database](#environment-and-database) before you continue.
+6. **Verify.** Run the repository's own checks, open a pull request, and read
    the job logs. The required check becomes `ci / CI`.
 
 AI coding agents: [`AGENTS.md`](../../AGENTS.md) at the repository root has

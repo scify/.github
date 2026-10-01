@@ -47,7 +47,10 @@ Rules that cause failures when you break them:
    Dependabot auto-merge and other workflows. **Every input you set needs
    evidence**: a file and a line in the repository, for example a test suite in
    `phpunit.xml` or a script in `composer.json`. With no evidence, keep the
-   default. Do not copy a recipe from the guide without that evidence.
+   default. Do not copy a recipe from the guide without that evidence. A value
+   from the old workflow is evidence only if the shared workflow gives the same
+   environment (for example, `pdo_mysql` from an old workflow with a MySQL
+   service is not).
    **The workflow has no database service**: if the tests need MySQL or
    PostgreSQL, stop and ask the user (see the guide's "Environment and
    database").

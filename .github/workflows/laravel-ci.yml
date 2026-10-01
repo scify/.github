@@ -4,6 +4,10 @@
 # (never an exact release such as @v0.1.4). Procedure for people and AI agents:
 # https://github.com/scify/.github/blob/main/.github/workflows/README.md#adopt-in-an-existing-repository
 #
+# No database service: the tests must run on SQLite (the Laravel default in
+# phpunit.xml). If they need MySQL or PostgreSQL, read "Environment and database"
+# in the guide before you adopt this workflow.
+#
 # Minimal call (every value below is a default and can be left out):
 #
 #   jobs:
