@@ -1,4 +1,14 @@
 {
     "name": "scify-security-fixture",
-    "private": true
+    "private": true,
+    "devEngines": {
+        "runtime": {
+            "name": "node",
+            "version": "24.22.1",
+            "onFail": "error"
+        }
+    },
+    "devDependencies": {
+        "braces": "3.0.3"
+    }
 }

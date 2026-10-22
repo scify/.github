@@ -20,7 +20,8 @@
 #   dev-configs    scripts and suspicious commands in .vscode/.claude/.cursor/.idea
 #                  (scan-dev-configs action; allow reviewed scripts with allowed-dev-scripts)
 #   npm-hardening  .npmrc and lockfile checks (verify-npm-hardening action)
-#   audit          `composer audit` and `npm audit` against the lock files
+#   audit          `composer audit` and `npm audit` against the lock files; npm audit
+#                  runs on the Node.js version from .nvmrc when the repository has one
 #
 # Each check runs only when the repository has the matching files, so the
 # same call works for Laravel, npm-only and PHP-only repositories.
@@ -45,6 +46,14 @@ on:
         description: Lowest npm advisory severity that fails the audit (low, moderate, high, critical).
         type: string
         default: high
+      npm-audit-omit-dev:
+        description: 'Audit only the production dependencies (npm audit --omit=dev). Use it when a dev tool has an advisory without a fix. Example: true, false'
+        type: boolean
+        default: false
+      node-version-file:
+        description: 'File that pins the Node.js version for npm audit, relative to the repository root. Empty: the .nvmrc in working-directory when it exists, else the Node.js of the runner. Example: .nvmrc, frontend/.nvmrc, package.json'
+        type: string
+        default: ''
       strict-dev-configs:
         description: Fail on suspicious commands in dev tool configs. Default only warns.
         type: boolean
@@ -221,11 +230,42 @@ jobs:
           ABANDONED: ${{ inputs.composer-abandoned }}
         run: composer audit --locked --abandoned="$ABANDONED" --format=table
 
+      # npm checks engines and devEngines in package.json, so npm audit needs the
+      # repository's Node.js version, not the one on the runner.
+      - name: Find the Node.js version file
+        id: node
+        if: hashFiles(format('{0}/package-lock.json', inputs.working-directory)) != ''
+        env:
+          NODE_VERSION_FILE: ${{ inputs.node-version-file }}
+          WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        run: |
+          if [ -n "$NODE_VERSION_FILE" ]; then
+            echo "file=$NODE_VERSION_FILE" >> "$GITHUB_OUTPUT"
+          elif [ -f .nvmrc ]; then
+            echo "file=$WORKING_DIRECTORY/.nvmrc" >> "$GITHUB_OUTPUT"
+          else
+            echo "No .nvmrc, npm audit uses the Node.js of the runner."
+          fi
+
+      - name: Set up Node.js
+        if: steps.node.outputs.file != ''
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: ${{ steps.node.outputs.file }}
+          # npm audit reads the lock file only; there is nothing to cache.
+          package-manager-cache: false
+
       - name: npm audit
         if: hashFiles(format('{0}/package-lock.json', inputs.working-directory)) != ''
         env:
           LEVEL: ${{ inputs.npm-audit-level }}
-        run: npm audit --audit-level="$LEVEL"
+          OMIT_DEV: ${{ inputs.npm-audit-omit-dev }}
+        run: |
+          args=(--audit-level="$LEVEL")
+          if [ "$OMIT_DEV" = true ]; then
+            args+=(--omit=dev)
+          fi
+          npm audit "${args[@]}"
 
       - name: Nothing to audit
         if: hashFiles(format('{0}/composer.lock', inputs.working-directory), format('{0}/package-lock.json', inputs.working-directory)) == ''

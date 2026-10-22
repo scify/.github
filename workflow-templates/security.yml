@@ -24,6 +24,8 @@ jobs:
     #   php-version: '8.4'                            # e.g. '8.3' (runs composer audit)
     #   composer-abandoned: report                    # e.g. fail, ignore
     #   npm-audit-level: high                         # e.g. moderate, critical
+    #   npm-audit-omit-dev: false                     # true: audit only production dependencies
+    #   node-version-file: ''                         # e.g. .nvmrc (default: the .nvmrc in working-directory)
     #   npm-min-release-age: '7'                      # e.g. '14' (days, 7 or more)
     #   gitleaks-full-history: false                  # true: pull requests scan the full history too
     #   strict-dev-configs: false                     # true: fail on suspicious commands in dev tool configs

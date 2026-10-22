@@ -416,7 +416,7 @@ npm-only and PHP-only repositories.
 | `Secrets` | Committed `.env` files anywhere in the repository, and Gitleaks. On a pull request, Gitleaks scans only the pull request's commits. On push and schedule, it scans the full git history. Examples, `.env.testing`, `.env.ci` and templates (`.dist`, `.sample`, `.template`, `.tpl`, `.j2`, `.jinja`, `.jinja2`) are allowed |
 | `Dev tool configs` | Script files and suspicious commands in `.vscode`, `.claude`, `.cursor` and `.idea`. See [`scan-dev-configs`](../actions/scan-dev-configs/README.md) |
 | `npm supply chain hardening` | `.npmrc` settings and lockfile. See [`verify-npm-hardening`](../actions/verify-npm-hardening/README.md) |
-| `Dependency audit` | `composer audit --locked` and `npm audit` against the lock files. No install is needed |
+| `Dependency audit` | `composer audit --locked` and `npm audit` against the lock files. No install is needed. `npm audit` runs on the Node.js version from `.nvmrc`, so `engines` and `devEngines` in `package.json` apply |
 
 | Input | Default | Example values |
 | --- | --- | --- |
@@ -426,6 +426,8 @@ npm-only and PHP-only repositories.
 | `gitleaks-full-history` | `false` (pull requests scan their own commits) | `true` (every run scans the full history) |
 | `npm-min-release-age` | `'7'` | `'14'` (days; 7 or more) |
 | `npm-audit-level` | `high` | `low`, `moderate`, `critical` |
+| `npm-audit-omit-dev` | `false` (audit all dependencies) | `true` (audit only the production dependencies, `npm audit --omit=dev`) |
+| `node-version-file` | `''` (the `.nvmrc` in `working-directory` when it exists, else the Node.js of the runner) | `.nvmrc`, `frontend/.nvmrc`, `package.json` |
 | `strict-dev-configs` | `false` (warn only) | `true` (fail on suspicious commands) |
 | `allowed-dev-scripts` | `''` (no scripts allowed) | `.claude/hooks/*.sh` (one glob per line; `*` also matches `/`) |
 
@@ -454,6 +456,19 @@ permissions:
 jobs:
   security:
     uses: scify/.github/.github/workflows/security.yml@v0.1
+```
+
+When a dev tool has an advisory without a fixed release, for example `braces`
+through `stylelint`, audit only the production dependencies. The dev tools do
+not reach the production assets. Use this only when no fix exists, and check
+the dev dependencies again when a fix appears:
+
+```yaml
+jobs:
+  security:
+    uses: scify/.github/.github/workflows/security.yml@v0.1
+    with:
+      npm-audit-omit-dev: true
 ```
 
 When your repository keeps hook scripts in `.claude/hooks/`, review them and allow them:
