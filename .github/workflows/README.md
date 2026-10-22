@@ -251,9 +251,14 @@ When `types-command` is empty, it runs:
 - `vendor/bin/phpstan analyse` when `phpstan.neon` or `phpstan.neon.dist` exists
 - `npm run types`, or else `npm run type-check`, when `frontend` is true and the script exists
 
-The job caches the PHPStan and Rector results, so later runs analyse only the
-changed files. If `phpstan.neon` sets `tmpDir` or `rector.php` sets
+The job caches the PHPStan, Rector and Pint results, so later runs analyse only
+the changed files. If `phpstan.neon` sets `tmpDir` or `rector.php` sets
 `cacheDirectory`, set `analysis-cache-paths` to the same paths.
+
+The automatic Pint step writes its cache to the runner's temporary folder. If
+`lint-command` runs Pint, give Pint a cache file and add that file to
+`analysis-cache-paths`. For example, set `"cache-file": ".pint.cache"` in
+`pint.json`, and add `.pint.cache` to `analysis-cache-paths` and `.gitignore`.
 
 ### Environment and database
 
@@ -497,6 +502,7 @@ jobs:
 | The weekly security run stopped | GitHub disables scheduled workflows in a public repository after 60 days without activity. Open the workflow in the **Actions** tab and click **Enable workflow**. |
 | `Script files found in dev tool directories` | A script file is in `.vscode`, `.claude`, `.cursor` or `.idea`. Remove it, or review it and add it to `allowed-dev-scripts`. |
 | PHPStan or Rector re-analyse every file on each run | `analysis-cache-paths` does not match `tmpDir` in `phpstan.neon` or `cacheDirectory` in `rector.php`. |
+| Pint checks every file on each run, with a custom `lint-command` | Pint has no cache file, or `analysis-cache-paths` does not include it. See [Laravel auto-detection](#laravel-auto-detection). |
 
 To test an unreleased change in this repository, point your caller at the
 branch: `uses: scify/.github/.github/workflows/laravel-ci.yml@my-branch`.
