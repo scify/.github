@@ -214,12 +214,15 @@ jobs:
           php artisan config:clear --ansi
       # ---- End of shared setup ----
 
-      # Restoring the most recent result cache makes PHPStan and Rector re-analyse
+      # Restoring the most recent result cache makes PHPStan, Rector and Pint re-analyse
       # only the changed files. The key changes on every commit, so each run saves.
-      - name: Cache PHPStan and Rector results
+      # Pint's cache stores its version and rules, so Pint discards an outdated cache.
+      - name: Cache PHPStan, Rector and Pint results
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ inputs.analysis-cache-paths }}
+          path: |
+            ${{ inputs.analysis-cache-paths }}
+            ${{ runner.temp }}/pint.cache
           key: analysis-${{ runner.os }}-${{ hashFiles(format('{0}/composer.lock', inputs.working-directory), format('{0}/rector.php', inputs.working-directory), format('{0}/phpstan.neon*', inputs.working-directory)) }}-${{ github.sha }}
           restore-keys: analysis-${{ runner.os }}-${{ hashFiles(format('{0}/composer.lock', inputs.working-directory), format('{0}/rector.php', inputs.working-directory), format('{0}/phpstan.neon*', inputs.working-directory)) }}-
 
@@ -231,7 +234,9 @@ jobs:
 
       - name: Pint
         if: inputs.lint-command == '' && hashFiles(format('{0}/pint.json', inputs.working-directory)) != ''
-        run: vendor/bin/pint --test
+        env:
+          PINT_CACHE_FILE: ${{ runner.temp }}/pint.cache
+        run: vendor/bin/pint --test --cache-file="$PINT_CACHE_FILE"
 
       - name: Rector (dry run)
         if: inputs.lint-command == '' && hashFiles(format('{0}/rector.php', inputs.working-directory)) != ''
