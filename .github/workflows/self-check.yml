@@ -8,7 +8,9 @@
 #   - every internal `scify/.github/...@vX` reference uses the same release tag
 #   - the composite actions pass on good fixtures and fail on bad ones
 #   - security.yml runs on this repository (it loads its actions by job.workflow_sha),
-#     and on tests/fixtures/security (composer.lock, package-lock.json, .env template)
+#     and on tests/fixtures/security (composer.lock, package-lock.json, .env template).
+#     The fixture fails unless npm audit runs on the Node.js from its .nvmrc
+#     (devEngines) and skips its dev dependency braces (an advisory without a fix)
 #   - smoke tests: laravel-ci.yml and node-ci.yml run against the fixture
 #     projects in tests/fixtures/, once with defaults and once with commands
 #
@@ -186,6 +188,9 @@ jobs:
     uses: ./.github/workflows/security.yml
     with:
       working-directory: tests/fixtures/security
+      # The fixture's dev dependency braces has a high advisory without a fix.
+      # Without this input the audit fails.
+      npm-audit-omit-dev: true
 
   laravel-defaults:
     name: Laravel CI, defaults
