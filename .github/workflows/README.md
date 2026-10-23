@@ -32,9 +32,9 @@ These six rules prevent the common mistakes:
    workflow is evidence only if the shared workflow gives the same
    environment: for example, `pdo_mysql` from an old workflow with a MySQL
    service is not.
-5. **Check the test database first.** The shared workflows start no MySQL or
-   PostgreSQL service. If the tests use one (read `phpunit.xml`, then
-   `.env.testing` or `.env.example`), this is a blocker: see
+5. **Check the test database first.** Read `phpunit.xml`, then `.env.testing`
+   or `.env.example`. SQLite needs no setting. For MySQL or MariaDB, set
+   `database-image`. PostgreSQL is not supported: see
    [Environment and database](#environment-and-database) before you continue.
 6. **Verify.** Run the repository's own checks, open a pull request, and read
    the job logs. The required check becomes `ci / CI`.
@@ -193,7 +193,8 @@ workflows. It applies to people and to AI coding agents.
 | Browser tests in `test-command` | They run in `Backend tests`, which has no browser, and fail | Exclude the browser suite, for example `--exclude-testsuite=Browser` |
 | The required check still has the old name | Every new pull request waits for a check that never runs; Dependabot auto-merge stops | Require `ci / CI` (step 8) |
 | A green job with nothing checked | For example "No package.json, skipping" | Read the job logs (step 7) |
-| The tests need MySQL or PostgreSQL | Every job fails: the workflow has no database service | See [Environment and database](#environment-and-database) |
+| The tests need MySQL or MariaDB, and `database-image` is empty | The tests fail: no database server runs | Set `database-image`. See [Environment and database](#environment-and-database) |
+| The tests need PostgreSQL | The workflow has no PostgreSQL service | See [Environment and database](#environment-and-database) |
 | `storage/framework/views` is missing in a clean checkout | Tests fail in CI only with "Please provide a valid cache path.": your local folder exists, but git does not track it | Commit the folder with a `.gitignore` that ignores everything except itself, as the other `storage/` folders do |
 | Old local copies of the actions stay | They drift and keep bugs that the shared copies fixed | Delete them (step 5) |
 
@@ -207,8 +208,8 @@ for a Laravel application.
 | Job | What it does |
 | --- | --- |
 | `Static checks` | Code style, lint and static analysis. See [auto-detection](#laravel-auto-detection). |
-| `Backend tests` | Builds the frontend assets (optional), runs `test-command`, then `npm run test` if `package.json` defines it. Uploads coverage when `coverage-file` is set. |
-| `Browser tests` | Builds the assets, installs Playwright Chromium, runs `browser-test-command`. Runs only with `browser-tests: true`. |
+| `Backend tests` | Starts the database service when `database-image` is set. Builds the frontend assets (optional), runs `test-command`, then `npm run test` if `package.json` defines it. Uploads coverage when `coverage-file` is set. |
+| `Browser tests` | Starts the database service when `database-image` is set. Builds the assets, installs Playwright Chromium, runs `browser-test-command`. Runs only with `browser-tests: true`. |
 | `CI` | Aggregate check. |
 
 Every job starts with the same setup steps. They install PHP and Composer
@@ -223,6 +224,8 @@ dependencies, optionally Node.js and npm dependencies, and prepare `.env` and
 | `php-version` | `'8.4'` | `'8.3'` |
 | `php-extensions` | `mbstring, dom, fileinfo, intl, pdo_sqlite, sqlite3, gd, zip, bcmath` | `mbstring, intl, pdo_mysql, redis` |
 | `env-file` | `''` (`.env.testing` if present, else `.env.example`) | `.env.testing`, `.env.ci` (relative to `working-directory`) |
+| `database-image` | `''` (no service; SQLite needs none) | `mariadb:11.8`, `mysql:8.4` |
+| `database-name` | `testing` | `app_test` (used only with `database-image`) |
 | `frontend` | `true` | `false` for a repository without `package.json` |
 | `build-frontend-for-tests` | `true` | `false` when tests do not need the Vite manifest |
 | `node-version-file` | `.nvmrc` (relative to the repository root) | `backend/.nvmrc`, `package.json` |
@@ -265,18 +268,43 @@ The automatic Pint step writes its cache to the runner's temporary folder. If
 The `.env` file comes from `env-file`. An existing `.env` is kept. The action
 then runs `php artisan key:generate`.
 
-The database comes from your `phpunit.xml` and `.env` file. The Laravel default,
-SQLite in memory, needs nothing else. The workflow has no MySQL or PostgreSQL
-service container.
+The database comes from your `phpunit.xml` and `.env` file.
 
-If the tests need MySQL or PostgreSQL, choose one of these before you adopt the
-workflow:
+**SQLite.** The Laravel default, SQLite in memory, needs nothing else. An SQLite
+file also works. Leave `database-image` empty: `php-extensions` already has
+`pdo_sqlite` and `sqlite3`.
 
-- **Move the tests to SQLite in memory.** Set `DB_CONNECTION` and `DB_DATABASE`
-  in `phpunit.xml`. Use `RefreshDatabase`, and seeding (`protected $seed =
-  true;` in `TestCase`) when the tests expect reference data. Tests of
-  database-specific SQL, such as `DATE_FORMAT`, can fail on SQLite.
-- **Keep the old CI** for the tests, and add only `security.yml`.
+**MySQL or MariaDB.** Set `database-image` to the server that production uses,
+for example `mariadb:11.8` or `mysql:8.4`. The `Backend tests` and `Browser
+tests` jobs then:
+
+- start that image as a service on `127.0.0.1:3306`, and wait until it is
+  healthy,
+- create the database `database-name` (default `testing`),
+- add `pdo_mysql` to the PHP extensions,
+- export `DB_HOST=127.0.0.1`, `DB_PORT=3306`, `DB_DATABASE`, `DB_USERNAME=root`
+  and `DB_PASSWORD=root` for every later step.
+
+Laravel reads these variables before `.env`. Your `phpunit.xml` or `env-file`
+still chooses `DB_CONNECTION` (`mysql` or `mariadb`). A `<server>` line or a
+`<env force="true">` line in `phpunit.xml` overrides the exported values, so its
+`DB_DATABASE` must match `database-name`. The `Static checks` job has no
+database.
+
+```yaml
+jobs:
+  ci:
+    uses: scify/.github/.github/workflows/laravel-ci.yml@v0.1
+    with:
+      database-image: mariadb:11.8      # the version that production runs
+      test-command: vendor/bin/phpunit
+```
+
+**PostgreSQL** is not supported. Move the tests to SQLite, or keep your own CI
+for the tests and add only `security.yml`. To move to SQLite: set
+`DB_CONNECTION` and `DB_DATABASE` in `phpunit.xml`, use `RefreshDatabase`, and
+seed (`protected $seed = true;` in `TestCase`) when the tests expect reference
+data. Tests of database-specific SQL, such as `DATE_FORMAT`, can fail on SQLite.
 
 Every job also runs `php artisan key:generate`, which boots the application. If
 the application reads the database while it boots (for example `Schema::hasTable()`

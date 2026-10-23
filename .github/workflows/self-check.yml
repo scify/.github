@@ -209,6 +209,36 @@ jobs:
       types-command: php -l app/Models/User.php
       test-command: php artisan test --testsuite=Unit
 
+  # The fixture tests use SQLite, so these jobs prove the service with migrations
+  # and `db:show --json`: grep fails the job when the server, its version or the
+  # exported DB_* values are not the requested ones.
+  laravel-mariadb:
+    name: Laravel CI, MariaDB service
+    uses: ./.github/workflows/laravel-ci.yml
+    with:
+      working-directory: tests/fixtures/laravel
+      frontend: false
+      database-image: mariadb:11.8
+      test-command: >-
+        export DB_CONNECTION=mariadb && php artisan migrate --force &&
+        out=$(php artisan db:show --json) && echo "$out" &&
+        grep -q '"name":"MariaDB","connection":"mariadb","version":"11\.8' <<< "$out" &&
+        grep -q '"host":"127.0.0.1","port":"3306","database":"testing"' <<< "$out"
+
+  laravel-mysql:
+    name: Laravel CI, MySQL service
+    uses: ./.github/workflows/laravel-ci.yml
+    with:
+      working-directory: tests/fixtures/laravel
+      frontend: false
+      database-image: mysql:8.4
+      database-name: app_test
+      test-command: >-
+        export DB_CONNECTION=mysql && php artisan migrate --force &&
+        out=$(php artisan db:show --json) && echo "$out" &&
+        grep -q '"name":"MySQL","connection":"mysql","version":"8\.4' <<< "$out" &&
+        grep -q '"host":"127.0.0.1","port":"3306","database":"app_test"' <<< "$out"
+
   node-defaults:
     name: Node CI, defaults
     uses: ./.github/workflows/node-ci.yml

@@ -12,7 +12,7 @@ order.
 
 | Folder | Contents | Smoke-test jobs |
 | --- | --- | --- |
-| `laravel/` | The `laravel/laravel` skeleton, with `pint.json` and `.nvmrc` added | `laravel-defaults`, `laravel-commands` |
+| `laravel/` | The `laravel/laravel` skeleton, with `pint.json` and `.nvmrc` added | `laravel-defaults`, `laravel-commands`, `laravel-mariadb`, `laravel-mysql` |
 | `node/` | A project without dependencies, with `lint`, `type-check`, `test` and `build` scripts | `node-defaults`, `node-commands`, `security-actions` |
 | `dev-configs/` | A `.claude` hook script and editor settings | `security-actions` |
 | `security/` | `composer.lock` without dependencies; `package-lock.json` with one dev dependency, `braces` 3.0.3, which has a high advisory without a fix; `.nvmrc` and a `devEngines` rule that allows only that Node.js version; a hardened `.npmrc`; and a Jinja `.env` template. The audit fails unless it runs on the `.nvmrc` version and with `npm-audit-omit-dev: true` | `security-fixture` |

@@ -4,9 +4,10 @@
 # (never an exact release such as @v0.1.4). Procedure for people and AI agents:
 # https://github.com/scify/.github/blob/main/.github/workflows/README.md#adopt-in-an-existing-repository
 #
-# No database service: the tests must run on SQLite (the Laravel default in
-# phpunit.xml). If they need MySQL or PostgreSQL, read "Environment and database"
-# in the guide before you adopt this workflow.
+# Database: SQLite (the Laravel default in phpunit.xml) needs no service. For
+# MySQL or MariaDB, set database-image: the test and e2e jobs then start that
+# database and export DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME and DB_PASSWORD.
+# PostgreSQL is not supported. Read "Environment and database" in the guide.
 #
 # Minimal call (every value below is a default and can be left out):
 #
@@ -26,6 +27,8 @@
 #         php-version: '8.4'
 #         php-extensions: mbstring, dom, fileinfo, intl, pdo_sqlite, sqlite3, gd, zip, bcmath
 #         env-file: .env.testing
+#         database-image: mariadb:11.8
+#         database-name: testing
 #         frontend: true
 #         build-frontend-for-tests: true
 #         node-version-file: .nvmrc
@@ -53,7 +56,8 @@
 #          failed or was cancelled. A skipped e2e job counts as green.
 #
 # Require the check "ci / CI" in branch protection (caller job id / this job name).
-# The database for tests comes from the repository's phpunit.xml and .env file.
+# The database for tests comes from the repository's phpunit.xml and .env file,
+# and from the exported DB_* variables when database-image is set.
 # Every command runs inside working-directory.
 #
 # The setup steps are YAML anchors (&name) in the lint job, reused (*name) by
@@ -79,6 +83,14 @@ on:
         description: "File copied to .env, relative to working-directory. Empty means .env.testing if present, else .env.example. Example: .env.testing, .env.ci"
         type: string
         default: ''
+      database-image:
+        description: "Docker image of a MySQL or MariaDB service for the test and e2e jobs. Empty means no service (SQLite needs none). Example: mariadb:11.8, mysql:8.4"
+        type: string
+        default: ''
+      database-name:
+        description: 'Database that the service creates. The jobs export it as DB_DATABASE. Used only with database-image. Example: testing, app_test'
+        type: string
+        default: testing
       frontend:
         description: 'Install Node.js and run the npm checks. Set to false for repositories without package.json. One of: true, false'
         type: boolean
@@ -150,7 +162,7 @@ jobs:
         uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: ${{ inputs.php-version }}
-          extensions: ${{ inputs.php-extensions }}
+          extensions: ${{ inputs.database-image != '' && format('{0}, pdo_mysql', inputs.php-extensions) || inputs.php-extensions }}
           coverage: ${{ inputs.coverage-file != '' && 'pcov' || 'none' }}
           tools: composer:v2
 
@@ -276,11 +288,52 @@ jobs:
     name: Backend tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # With an empty image, GitHub starts no service container. An image that is
+    # not MySQL or MariaDB also gets none, and the next step fails with a message.
+    services:
+      database: &database-service
+        image: ${{ (contains(inputs.database-image, 'mysql') || contains(inputs.database-image, 'mariadb')) && inputs.database-image || '' }}
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: ${{ inputs.database-name }}
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: ${{ inputs.database-name }}
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "${{ contains(inputs.database-image, 'mariadb') && 'healthcheck.sh --connect --innodb_initialized' || 'mysqladmin ping -h 127.0.0.1 -uroot -proot' }}"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
     steps:
       - *checkout
+
+      # Real environment variables take precedence over .env in Laravel.
+      - &database-env
+        name: Connect to the database service
+        if: inputs.database-image != ''
+        env:
+          DATABASE_IMAGE: ${{ inputs.database-image }}
+          DATABASE_NAME: ${{ inputs.database-name }}
+        run: |
+          case "$DATABASE_IMAGE" in
+            *mysql* | *mariadb*) ;;
+            *)
+              echo "::error::database-image '$DATABASE_IMAGE' is not a MySQL or MariaDB image"
+              exit 1
+              ;;
+          esac
+          {
+            echo "DB_HOST=127.0.0.1"
+            echo "DB_PORT=3306"
+            echo "DB_DATABASE=$DATABASE_NAME"
+            echo "DB_USERNAME=root"
+            echo "DB_PASSWORD=root"
+          } >> "$GITHUB_ENV"
+          echo "The tests use $DATABASE_IMAGE, database $DATABASE_NAME, on 127.0.0.1:3306"
       - *setup-php
       - *prepare-env
       - *composer-cache-dir
@@ -321,11 +374,14 @@ jobs:
     if: inputs.browser-tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      database: *database-service
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
     steps:
       - *checkout
+      - *database-env
       - *setup-php
       - *prepare-env
       - *composer-cache-dir
