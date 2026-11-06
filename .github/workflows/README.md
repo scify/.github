@@ -209,7 +209,7 @@ for a Laravel application.
 | --- | --- |
 | `Static checks` | Code style, lint and static analysis. See [auto-detection](#laravel-auto-detection). |
 | `Backend tests` | Starts the database service when `database-image` is set. Builds the frontend assets (optional), runs `test-command`, then `npm run test` if `package.json` defines it. Uploads coverage when `coverage-file` is set. |
-| `Browser tests` | Starts the database service when `database-image` is set. Builds the assets, installs Playwright Chromium, runs `browser-test-command`. Runs only with `browser-tests: true`. |
+| `Browser tests` | Starts the database service when `database-image` is set. Builds the assets, installs Playwright Chromium (with its apt packages only when `playwright-system-deps` is `true`), runs `browser-test-command`. Runs only with `browser-tests: true`. |
 | `CI` | Aggregate check. |
 
 Every job starts with the same setup steps. They install PHP and Composer
@@ -236,6 +236,7 @@ dependencies, optionally Node.js and npm dependencies, and prepare `.env` and
 | `coverage-file` | `''` (no coverage) | `coverage/clover.xml` (relative to `working-directory`) |
 | `browser-tests` | `false` | `true` |
 | `browser-test-command` | `vendor/bin/pest --testsuite=Browser` | `php artisan dusk` |
+| `playwright-system-deps` | `false` (the runner's libraries are enough) | `true` when Chromium does not start for a missing library |
 
 | Secret | Required | Purpose |
 | --- | --- | --- |
