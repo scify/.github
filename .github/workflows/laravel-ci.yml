@@ -133,6 +133,10 @@ on:
         description: 'Command that runs the browser tests. Example: vendor/bin/pest --testsuite=Browser, php artisan dusk'
         type: string
         default: vendor/bin/pest --testsuite=Browser
+      playwright-system-deps:
+        description: 'Install the operating-system packages of Playwright Chromium (libraries and fonts) with apt. The ubuntu-latest runner already has the libraries that Chromium needs; the apt step can take minutes when the Ubuntu mirror is slow. Set true only when Chromium does not start. One of: true, false'
+        type: boolean
+        default: false
     secrets:
       CODECOV_TOKEN:
         description: Codecov upload token. Needed only when coverage-file is set.
@@ -392,15 +396,24 @@ jobs:
       - *key-generate
 
       # Keyed on package-lock.json, which pins the Playwright version. On a cache hit
-      # `playwright install` skips the download and only installs the OS dependencies.
+      # `playwright install` skips the browser download.
       - name: Cache Playwright browsers
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles(format('{0}/package-lock.json', inputs.working-directory)) }}
 
+      # Without playwright-system-deps, the runner's own libraries are enough for Chromium,
+      # and the apt step (libraries and fonts) is skipped.
       - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+        env:
+          PLAYWRIGHT_SYSTEM_DEPS: ${{ inputs.playwright-system-deps }}
+        run: |
+          if [ "$PLAYWRIGHT_SYSTEM_DEPS" = "true" ]; then
+            npx playwright install --with-deps chromium
+          else
+            npx playwright install chromium
+          fi
 
       # A leftover public/hot file makes Laravel load assets from the Vite dev server.
       - name: Build frontend assets

@@ -54,3 +54,4 @@ jobs:
       # coverage-file: ''                             # e.g. coverage/clover.xml (turns on PCOV and the Codecov upload)
       # browser-tests: false                          # true: run the Playwright job
       # browser-test-command: vendor/bin/pest --testsuite=Browser
+      # playwright-system-deps: false                 # true: apt-install Chromium's libraries and fonts
