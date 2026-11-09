@@ -43,8 +43,8 @@ jobs:
       # node-version-file: .nvmrc                     # e.g. package.json
 
       # Static checks ('' = auto-detect Pint, Rector, PHPStan and npm scripts)
-      # lint-command: ''                              # e.g. composer check
-      # types-command: ''                             # e.g. composer check:types
+      # lint-command: ''                              # e.g. vendor/bin/pint --test && npm run check
+      # types-command: ''                             # e.g. composer analyse
       # analysis-cache-paths: |                       # match tmpDir in phpstan.neon and cacheDirectory in rector.php
       #   /tmp/phpstan
       #   /tmp/rector_cached_files

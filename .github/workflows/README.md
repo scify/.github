@@ -158,7 +158,7 @@ workflows. It applies to people and to AI coding agents.
 
    Replace `$default-branch` with the default branch, for example `main`.
 4. **Map each existing command to an input.** Keep the repository's own
-   commands where they exist, for example `lint-command: composer check`. Leave
+   commands where they exist, for example `types-command: composer analyse`. Leave
    an input commented out when its default already does the same thing. Set an
    input only with evidence (a file and a line): for example, `browser-tests`
    needs a browser test suite in `phpunit.xml`, and `php-extensions` follows
@@ -168,7 +168,7 @@ workflows. It applies to people and to AI coding agents.
    `verify-npm-hardening`. Keep every other workflow, for example deployment,
    Dependabot auto-merge or release workflows.
 6. **Run the repository's own checks on the new files.** Run its formatters and
-   linters, for example `npm run check` or `composer check`, and
+   linters, for example `npm run check` or `composer lint:check`, and
    `actionlint .github/workflows/*.yml`.
    The templates run on pushes to the default branch and on pull requests.
    If the old workflow ran on every push to every branch, tell the team: a
@@ -189,7 +189,7 @@ workflows. It applies to people and to AI coding agents.
 | A caller file written from scratch | Missing triggers, for example no CI on pull requests | Start from the template (step 3) |
 | The repository's formatter does not run before the push | CI fails, for example Prettier on the new workflow file | Run the repository's own checks first (step 6) |
 | A commented-out input under `# with:` | Prettier moves the comment, and the uncommented input no longer sits under `with:` | Keep the extra indentation after the `#`, as in the templates: `#   input: value` |
-| Two inputs run the same tool | Double run time, for example `composer check` that already includes `check:types` | Give each input a command that does not overlap with the others |
+| Two inputs run the same tool | Double run time, for example `lint-command: composer lint:check`, which already includes `analyse` | Give each input a command that does not overlap with the others |
 | Browser tests in `test-command` | They run in `Backend tests`, which has no browser, and fail | Exclude the browser suite, for example `--exclude-testsuite=Browser` |
 | The required check still has the old name | Every new pull request waits for a check that never runs; Dependabot auto-merge stops | Require `ci / CI` (step 8) |
 | A green job with nothing checked | For example "No package.json, skipping" | Read the job logs (step 7) |
@@ -229,8 +229,8 @@ dependencies, optionally Node.js and npm dependencies, and prepare `.env` and
 | `frontend` | `true` | `false` for a repository without `package.json` |
 | `build-frontend-for-tests` | `true` | `false` when tests do not need the Vite manifest |
 | `node-version-file` | `.nvmrc` (relative to the repository root) | `backend/.nvmrc`, `package.json` |
-| `lint-command` | `''` (auto-detect) | `composer check` |
-| `types-command` | `''` (auto-detect) | `composer check:types` |
+| `lint-command` | `''` (auto-detect) | `vendor/bin/pint --test && vendor/bin/rector --dry-run && npm run check` |
+| `types-command` | `''` (auto-detect) | `composer analyse` |
 | `analysis-cache-paths` | `/tmp/phpstan` and `/tmp/rector_cached_files` | `.phpstan-cache` and `/tmp/rector` (one path per line; absolute, or relative to the repository root) |
 | `test-command` | `php artisan test` | `php artisan test --parallel`, `vendor/bin/pest --exclude-testsuite=Browser` |
 | `coverage-file` | `''` (no coverage) | `coverage/clover.xml` (relative to `working-directory`) |
@@ -335,8 +335,9 @@ jobs:
 Composer scripts for the checks, Pest with coverage, and browser tests. Use
 this recipe only when the repository has each of these: the Composer scripts, a
 Codecov token, and a Pest browser suite (`pestphp/pest-plugin-browser` and a
-`Browser` test suite). Make sure that `composer check` does not already run
-`check:types`, or PHPStan runs twice:
+`Browser` test suite). Leave `lint-command` empty: auto-detection runs Pint,
+Rector and `npm run check`. Do not use `composer lint:check` there: it includes
+`analyse`, so PHPStan runs twice:
 
 ```yaml
 jobs:
@@ -345,8 +346,7 @@ jobs:
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     with:
-      lint-command: composer check
-      types-command: composer check:types
+      types-command: composer analyse
       analysis-cache-paths: |
         .phpstan-cache
         /tmp/rector

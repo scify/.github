@@ -32,8 +32,8 @@
 #         frontend: true
 #         build-frontend-for-tests: true
 #         node-version-file: .nvmrc
-#         lint-command: composer check
-#         types-command: composer check:types
+#         lint-command: vendor/bin/pint --test && vendor/bin/rector --dry-run && npm run check
+#         types-command: composer analyse
 #         analysis-cache-paths: |
 #           .phpstan-cache
 #           /tmp/rector
@@ -104,11 +104,11 @@ on:
         type: string
         default: .nvmrc
       lint-command:
-        description: 'Command for code style and lint. Empty means auto-detect Pint, Rector and npm check/lint. Example: composer check'
+        description: 'Command for code style and lint. Empty means auto-detect Pint, Rector and npm check/lint. Example: vendor/bin/pint --test && vendor/bin/rector --dry-run && npm run check'
         type: string
         default: ''
       types-command:
-        description: 'Command for static analysis. Empty means auto-detect PHPStan and npm types/type-check. Example: composer check:types'
+        description: 'Command for static analysis. Empty means auto-detect PHPStan and npm types/type-check. Example: composer analyse'
         type: string
         default: ''
       analysis-cache-paths:
