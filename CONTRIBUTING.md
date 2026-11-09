@@ -17,8 +17,8 @@ interactions with the project.
 1. Keep each pull request focused on one change. Open separate pull requests
    for unrelated changes.
 2. Run the project's checks before you push. Most SciFY repositories provide
-   `composer check` and `npm run check`, or a `composer test` script. The
-   repository `README.md` documents the exact commands.
+   `composer lint:check` and `composer test`, and many provide
+   `npm run check`. The repository `README.md` documents the exact commands.
 3. Update the `README.md` when your change affects how the project is set up
    or used. This includes new environment variables, configuration options,
    and useful file locations.

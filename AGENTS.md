@@ -76,6 +76,30 @@ Rules that cause failures when you break them:
 The npm rules that `security.yml` enforces are in the
 [npm policy](.github/actions/verify-npm-hardening/README.md#policy).
 
+### Composer script names
+
+SciFY Laravel apps and PHP packages use the same Composer script names. A
+repository can add scripts, for example `dev` or `test:browser`, but keeps
+these names for these jobs:
+
+| Script | Runs |
+| --- | --- |
+| `setup` | The first setup. An app: `.env`, dependencies, app key, `npm ci`, build, Gitleaks and the pre-commit hook. A package: dependencies, Gitleaks and the hook |
+| `analyse` | Static analysis: PHPStan, and `npm run types` when the repository has TypeScript |
+| `lint:check` | Every style and lint check, without changes, then `@analyse` |
+| `lint:fix` | The same tools in fix mode, then `@analyse`. Rector runs before Pint |
+| `test` | The test suite, without browser tests |
+| `test:coverage` | The test suite with coverage |
+
+`lint:fix` must run every fixer whose check `lint:check` runs. Then
+`lint:check` passes after `lint:fix`.
+
+In `laravel-ci.yml`, set `types-command: composer analyse`. Do not set
+`lint-command: composer lint:check`: it includes `analyse`, so PHPStan runs
+twice. Leave `lint-command` empty, because auto-detection runs Pint, Rector and
+`npm run check`. Set it only when the repository has more linters, and then
+list every lint tool without `analyse`.
+
 ## Part 2: Change this repository
 
 ### Layout
