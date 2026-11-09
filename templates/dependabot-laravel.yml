@@ -8,6 +8,10 @@
 #   - No `ignore` block: a security fix that exists only in a new major must
 #     still be proposed. Majors need manual review.
 #   - `schedule` is required by the schema but produces no PRs at limit 0.
+#   - No `cooldown`: Dependabot applies it to version updates only, never to
+#     security updates, so it has no effect here. New releases wait through the
+#     install policies instead: `policy.cooldown` in composer.json (Composer
+#     2.11+) and `min-release-age` in .npmrc.
 #
 # Security updates also require "Dependabot security updates" to be enabled in
 # the repository's Security settings.
