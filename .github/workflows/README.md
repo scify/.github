@@ -33,8 +33,8 @@ These six rules prevent the common mistakes:
    environment: for example, `pdo_mysql` from an old workflow with a MySQL
    service is not.
 5. **Check the test database first.** Read `phpunit.xml`, then `.env.testing`
-   or `.env.example`. SQLite needs no setting. For MySQL or MariaDB, set
-   `database-image`. PostgreSQL is not supported: see
+   or `.env.example`. SQLite needs no setting. For MySQL, MariaDB or
+   PostgreSQL, set `database-image`. See
    [Environment and database](#environment-and-database) before you continue.
 6. **Verify.** Run the repository's own checks, open a pull request, and read
    the job logs. The required check becomes `ci / CI`.
@@ -193,8 +193,8 @@ workflows. It applies to people and to AI coding agents.
 | Browser tests in `test-command` | They run in `Backend tests`, which has no browser, and fail | Exclude the browser suite, for example `--exclude-testsuite=Browser` |
 | The required check still has the old name | Every new pull request waits for a check that never runs; Dependabot auto-merge stops | Require `ci / CI` (step 8) |
 | A green job with nothing checked | For example "No package.json, skipping" | Read the job logs (step 7) |
-| The tests need MySQL or MariaDB, and `database-image` is empty | The tests fail: no database server runs | Set `database-image`. See [Environment and database](#environment-and-database) |
-| The tests need PostgreSQL | The workflow has no PostgreSQL service | See [Environment and database](#environment-and-database) |
+| The tests need MySQL, MariaDB or PostgreSQL, and `database-image` is empty | The tests fail: no database server runs | Set `database-image`. See [Environment and database](#environment-and-database) |
+| `phpunit.xml` forces `DB_USERNAME` or `DB_PASSWORD` (`force="true"`) | The tests cannot sign in to the service, which uses `root`/`root` | Remove `force="true"` from these two lines. See [Environment and database](#environment-and-database) |
 | `storage/framework/views` is missing in a clean checkout | Tests fail in CI only with "Please provide a valid cache path.": your local folder exists, but git does not track it | Commit the folder with a `.gitignore` that ignores everything except itself, as the other `storage/` folders do |
 | Old local copies of the actions stay | They drift and keep bugs that the shared copies fixed | Delete them (step 5) |
 
@@ -224,7 +224,7 @@ dependencies, optionally Node.js and npm dependencies, and prepare `.env` and
 | `php-version` | `'8.4'` | `'8.3'` |
 | `php-extensions` | `mbstring, dom, fileinfo, intl, pdo_sqlite, sqlite3, gd, zip, bcmath` | `mbstring, intl, pdo_mysql, redis` |
 | `env-file` | `''` (`.env.testing` if present, else `.env.example`) | `.env.testing`, `.env.ci` (relative to `working-directory`) |
-| `database-image` | `''` (no service; SQLite needs none) | `mariadb:11.8`, `mysql:8.4` |
+| `database-image` | `''` (no service; SQLite needs none) | `mariadb:11.8`, `mysql:8.4`, `postgres:17` |
 | `database-name` | `testing` | `app_test` (used only with `database-image`) |
 | `frontend` | `true` | `false` for a repository without `package.json` |
 | `build-frontend-for-tests` | `true` | `false` when tests do not need the Vite manifest |
@@ -275,22 +275,23 @@ The database comes from your `phpunit.xml` and `.env` file.
 file also works. Leave `database-image` empty: `php-extensions` already has
 `pdo_sqlite` and `sqlite3`.
 
-**MySQL or MariaDB.** Set `database-image` to the server that production uses,
-for example `mariadb:11.8` or `mysql:8.4`. The `Backend tests` and `Browser
-tests` jobs then:
+**MySQL, MariaDB or PostgreSQL.** Set `database-image` to the server that
+production uses, for example `mariadb:11.8`, `mysql:8.4` or `postgres:17`. The
+`Backend tests` and `Browser tests` jobs then:
 
-- start that image as a service on `127.0.0.1:3306`, and wait until it is
-  healthy,
-- create the database `database-name` (default `testing`),
-- add `pdo_mysql` to the PHP extensions,
-- export `DB_HOST=127.0.0.1`, `DB_PORT=3306`, `DB_DATABASE`, `DB_USERNAME=root`
+- start that image as a service on `127.0.0.1:3306` (MySQL, MariaDB) or
+  `127.0.0.1:5432` (PostgreSQL), and wait until it is healthy,
+- create the database `database-name` (default `testing`) and the user `root`
+  with the password `root`,
+- add `pdo_mysql` or `pdo_pgsql` to the PHP extensions,
+- export `DB_HOST=127.0.0.1`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME=root`
   and `DB_PASSWORD=root` for every later step.
 
 Laravel reads these variables before `.env`. Your `phpunit.xml` or `env-file`
-still chooses `DB_CONNECTION` (`mysql` or `mariadb`). A `<server>` line or a
-`<env force="true">` line in `phpunit.xml` overrides the exported values, so its
-`DB_DATABASE` must match `database-name`. The `Static checks` job has no
-database.
+still chooses `DB_CONNECTION` (`mysql`, `mariadb` or `pgsql`). A `<server>` line
+or a `<env force="true">` line in `phpunit.xml` overrides the exported values.
+So a forced `DB_DATABASE` must match `database-name`, and `DB_USERNAME` and
+`DB_PASSWORD` must not be forced. The `Static checks` job has no database.
 
 ```yaml
 jobs:
@@ -301,11 +302,14 @@ jobs:
       test-command: vendor/bin/phpunit
 ```
 
-**PostgreSQL** is not supported. Move the tests to SQLite, or keep your own CI
-for the tests and add only `security.yml`. To move to SQLite: set
-`DB_CONNECTION` and `DB_DATABASE` in `phpunit.xml`, use `RefreshDatabase`, and
-seed (`protected $seed = true;` in `TestCase`) when the tests expect reference
-data. Tests of database-specific SQL, such as `DATE_FORMAT`, can fail on SQLite.
+```yaml
+jobs:
+  ci:
+    uses: scify/.github/.github/workflows/laravel-ci.yml@v0.1
+    with:
+      database-image: postgres:17       # the version that production runs
+      database-name: test               # phpunit.xml forces DB_DATABASE=test
+```
 
 Every job also runs `php artisan key:generate`, which boots the application. If
 the application reads the database while it boots (for example `Schema::hasTable()`

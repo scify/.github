@@ -5,8 +5,8 @@
 # Each commented-out input shows its default. Uncomment a line only to change it.
 # The "e.g." comment shows other accepted values.
 # In branch protection, require the check "ci / CI".
-# Database: SQLite needs no input. For MySQL or MariaDB, set database-image.
-# PostgreSQL is not supported. See "Environment and database" in the guide.
+# Database: SQLite needs no input. For MySQL, MariaDB or PostgreSQL, set
+# database-image. See "Environment and database" in the guide.
 name: CI
 
 on:
@@ -34,7 +34,7 @@ jobs:
       # env-file: ''                                  # e.g. .env.testing, .env.ci ('' = .env.testing, else .env.example)
 
       # Database ('' = no service; SQLite needs none)
-      # database-image: ''                            # e.g. mariadb:11.8, mysql:8.4
+      # database-image: ''                            # e.g. mariadb:11.8, mysql:8.4, postgres:17
       # database-name: testing                        # e.g. app_test (the service creates it; exported as DB_DATABASE)
 
       # Frontend
