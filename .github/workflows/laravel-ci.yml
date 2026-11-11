@@ -5,9 +5,9 @@
 # https://github.com/scify/.github/blob/main/.github/workflows/README.md#adopt-in-an-existing-repository
 #
 # Database: SQLite (the Laravel default in phpunit.xml) needs no service. For
-# MySQL or MariaDB, set database-image: the test and e2e jobs then start that
-# database and export DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME and DB_PASSWORD.
-# PostgreSQL is not supported. Read "Environment and database" in the guide.
+# MySQL, MariaDB or PostgreSQL, set database-image: the test and e2e jobs then
+# start that database and export DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME and
+# DB_PASSWORD. Read "Environment and database" in the guide.
 #
 # Minimal call (every value below is a default and can be left out):
 #
@@ -84,7 +84,7 @@ on:
         type: string
         default: ''
       database-image:
-        description: "Docker image of a MySQL or MariaDB service for the test and e2e jobs. Empty means no service (SQLite needs none). Example: mariadb:11.8, mysql:8.4"
+        description: "Docker image of a MySQL, MariaDB or PostgreSQL service for the test and e2e jobs. Empty means no service (SQLite needs none). Example: mariadb:11.8, mysql:8.4, postgres:17"
         type: string
         default: ''
       database-name:
@@ -166,7 +166,7 @@ jobs:
         uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: ${{ inputs.php-version }}
-          extensions: ${{ inputs.database-image != '' && format('{0}, pdo_mysql', inputs.php-extensions) || inputs.php-extensions }}
+          extensions: ${{ contains(inputs.database-image, 'postgres') && format('{0}, pdo_pgsql', inputs.php-extensions) || inputs.database-image != '' && format('{0}, pdo_mysql', inputs.php-extensions) || inputs.php-extensions }}
           coverage: ${{ inputs.coverage-file != '' && 'pcov' || 'none' }}
           tools: composer:v2
 
@@ -293,19 +293,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # With an empty image, GitHub starts no service container. An image that is
-    # not MySQL or MariaDB also gets none, and the next step fails with a message.
+    # not MySQL, MariaDB or PostgreSQL also gets none, and the next step fails
+    # with a message. Each image reads only its own environment variables.
+    # pg_isready connects over TCP: the PostgreSQL image's init server listens
+    # only on a socket, so the service is healthy after the database exists.
     services:
       database: &database-service
-        image: ${{ (contains(inputs.database-image, 'mysql') || contains(inputs.database-image, 'mariadb')) && inputs.database-image || '' }}
+        image: ${{ (contains(inputs.database-image, 'mysql') || contains(inputs.database-image, 'mariadb') || contains(inputs.database-image, 'postgres')) && inputs.database-image || '' }}
         env:
           MARIADB_ROOT_PASSWORD: root
           MARIADB_DATABASE: ${{ inputs.database-name }}
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: ${{ inputs.database-name }}
+          POSTGRES_USER: root
+          POSTGRES_PASSWORD: root
+          POSTGRES_DB: ${{ inputs.database-name }}
         ports:
-          - 3306:3306
+          - ${{ contains(inputs.database-image, 'postgres') && '5432:5432' || '3306:3306' }}
         options: >-
-          --health-cmd "${{ contains(inputs.database-image, 'mariadb') && 'healthcheck.sh --connect --innodb_initialized' || 'mysqladmin ping -h 127.0.0.1 -uroot -proot' }}"
+          --health-cmd "${{ contains(inputs.database-image, 'postgres') && 'pg_isready -h 127.0.0.1 -U root' || contains(inputs.database-image, 'mariadb') && 'healthcheck.sh --connect --innodb_initialized' || 'mysqladmin ping -h 127.0.0.1 -uroot -proot' }}"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
@@ -324,20 +330,21 @@ jobs:
           DATABASE_NAME: ${{ inputs.database-name }}
         run: |
           case "$DATABASE_IMAGE" in
-            *mysql* | *mariadb*) ;;
+            *postgres*) port=5432 ;;
+            *mysql* | *mariadb*) port=3306 ;;
             *)
-              echo "::error::database-image '$DATABASE_IMAGE' is not a MySQL or MariaDB image"
+              echo "::error::database-image '$DATABASE_IMAGE' is not a MySQL, MariaDB or PostgreSQL image"
               exit 1
               ;;
           esac
           {
             echo "DB_HOST=127.0.0.1"
-            echo "DB_PORT=3306"
+            echo "DB_PORT=$port"
             echo "DB_DATABASE=$DATABASE_NAME"
             echo "DB_USERNAME=root"
             echo "DB_PASSWORD=root"
           } >> "$GITHUB_ENV"
-          echo "The tests use $DATABASE_IMAGE, database $DATABASE_NAME, on 127.0.0.1:3306"
+          echo "The tests use $DATABASE_IMAGE, database $DATABASE_NAME, on 127.0.0.1:$port"
       - *setup-php
       - *prepare-env
       - *composer-cache-dir

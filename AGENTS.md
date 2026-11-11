@@ -51,11 +51,11 @@ Rules that cause failures when you break them:
    from the old workflow is evidence only if the shared workflow gives the same
    environment (for example, `pdo_mysql` from an old workflow with a MySQL
    service is not).
-   **Check the test database first.** SQLite needs no input. For MySQL or
-   MariaDB, set `database-image` to the version that production runs, with
-   evidence (for example the old CI service or `.ddev/config.yaml`).
-   PostgreSQL is not supported: stop and ask the user (see the guide's
-   "Environment and database").
+   **Check the test database first.** SQLite needs no input. For MySQL,
+   MariaDB or PostgreSQL, set `database-image` to the version that production
+   runs, with evidence (for example the old CI service or `.ddev/config.yaml`).
+   The service user is `root`/`root`: `phpunit.xml` must not force
+   `DB_USERNAME` or `DB_PASSWORD` (see the guide's "Environment and database").
 
 2. **Workflows by tag, actions by SHA.** Call a reusable workflow with `@v0.1`.
    The organisation requires every action in a step to be pinned by full commit

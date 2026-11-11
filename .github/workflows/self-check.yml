@@ -239,6 +239,20 @@ jobs:
         grep -q '"name":"MySQL","connection":"mysql","version":"8\.4' <<< "$out" &&
         grep -q '"host":"127.0.0.1","port":"3306","database":"app_test"' <<< "$out"
 
+  laravel-postgres:
+    name: Laravel CI, PostgreSQL service
+    uses: ./.github/workflows/laravel-ci.yml
+    with:
+      working-directory: tests/fixtures/laravel
+      frontend: false
+      database-image: postgres:17
+      database-name: app_test
+      test-command: >-
+        export DB_CONNECTION=pgsql && php artisan migrate --force &&
+        out=$(php artisan db:show --json) && echo "$out" &&
+        grep -q '"name":"PostgreSQL","connection":"pgsql","version":"17\.' <<< "$out" &&
+        grep -q '"host":"127.0.0.1","port":"5432","database":"app_test"' <<< "$out"
+
   node-defaults:
     name: Node CI, defaults
     uses: ./.github/workflows/node-ci.yml
