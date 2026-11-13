@@ -39,6 +39,7 @@ deployment secrets, so they will live in a separate private repository.
 | `laravel-ci.yml` | CI for Laravel applications |
 | `node-ci.yml` | CI for npm-only applications |
 | `security.yml` | Secret, dev tool config, npm hardening and dependency audit checks |
+| `production-branch-guard.yml` | Pull requests into a deploy branch, for example `production`, only from allowed branches |
 
 To use them in your application, read the
 [workflow guide](.github/workflows/README.md). It explains how a call works,
@@ -113,7 +114,7 @@ The organisation requires every action to be pinned to a full commit SHA, and
 this includes actions from `scify/.github`. Reusable workflows can still be
 called by tag. So:
 
-- `security.yml` does not call its actions by tag. It checks out `scify/.github`
+- `security.yml` and `production-branch-guard.yml` do not call their actions by tag. It checks out `scify/.github`
   at `job.workflow_sha`, the commit of the workflow file itself, and runs the
   actions from that local path. The actions always match the workflow version.
 - `laravel-ci.yml` and `node-ci.yml` use no composite actions. They share setup

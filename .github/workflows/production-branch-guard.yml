@@ -1,0 +1,66 @@
+# Reusable guard for a branch that deploys, for example production.
+#
+# To use it: start from workflow-templates/production-branch-guard.yml and pin the short tag @v0.1
+# (never an exact release such as @v0.1.4). Guide:
+# https://github.com/scify/.github/blob/main/.github/workflows/README.md#production-branch-guard
+#
+# Call it from a repository workflow:
+#
+#   on:
+#     pull_request_target:
+#       branches: [production]
+#       types: [opened, synchronize, reopened, edited]
+#   permissions:
+#     contents: read
+#   jobs:
+#     guard:
+#       uses: scify/.github/.github/workflows/production-branch-guard.yml@v0.1
+#       with:
+#         allowed-branches: |
+#           main
+#           hotfix/*
+#
+# The job fails unless the pull request comes from a branch of the same
+# repository that matches allowed-branches. In the ruleset of the protected
+# branch, require the check "guard / Production Branch Guard".
+#
+# pull_request_target runs the caller file from the default branch, so a pull
+# request cannot change the check that it must pass. This workflow never checks
+# out pull request code: it checks out only scify/.github and compares names.
+name: Production Branch Guard
+
+on:
+  workflow_call:
+    inputs:
+      allowed-branches:
+        description: "Source branches that may merge into the protected branch. One glob per line; `*` also matches `/`. Examples: main, hotfix/*"
+        type: string
+        required: false
+        default: main
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: Production Branch Guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # The org requires actions pinned by SHA, so this workflow cannot call its
+      # own action by tag. It checks out scify/.github at the exact commit of
+      # this workflow file and runs the action from a local path.
+      - name: Check out the shared actions
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .scify-github
+          persist-credentials: false
+
+      - name: Check the source branch
+        uses: ./.scify-github/.github/actions/production-branch-guard
+        with:
+          allowed-branches: ${{ inputs.allowed-branches }}
+          head-ref: ${{ github.event.pull_request.head.ref }}
+          head-repository: ${{ github.event.pull_request.head.repo.full_name }}

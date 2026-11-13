@@ -5,3 +5,6 @@ paths:
   .github/workflows/security.yml:
     ignore:
       - 'property "workflow_(repository|sha)" is not defined in object type'
+  .github/workflows/production-branch-guard.yml:
+    ignore:
+      - 'property "workflow_(repository|sha)" is not defined in object type'

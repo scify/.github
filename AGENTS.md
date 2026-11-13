@@ -25,6 +25,10 @@ even when the release list shows it as "Latest".
 | npm only (has `package.json`, no `composer.json`) | `node-ci.yml` and `security.yml` | `workflow-templates/node-ci.yml`, `workflow-templates/security.yml` |
 | Other (PHP library, WordPress, static site) | `security.yml` only | `workflow-templates/security.yml` |
 
+A repository that deploys from a branch, for example `production`, also calls
+`production-branch-guard.yml` from `workflow-templates/production-branch-guard.yml`.
+Its required check is `guard / Production Branch Guard`.
+
 Follow the procedure in
 [Adopt in an existing repository](.github/workflows/README.md#adopt-in-an-existing-repository).
 The [workflow guide](.github/workflows/README.md) lists every input with its
@@ -106,10 +110,11 @@ list every lint tool without `analyse`.
 
 | Path | Contents |
 | --- | --- |
-| `.github/workflows/laravel-ci.yml`, `node-ci.yml`, `security.yml` | Reusable workflows (`on: workflow_call`) |
+| `.github/workflows/laravel-ci.yml`, `node-ci.yml`, `security.yml`, `production-branch-guard.yml` | Reusable workflows (`on: workflow_call`) |
 | `.github/workflows/self-check.yml` | CI of this repository. Not reusable |
 | `.github/workflows/README.md` | Workflow guide for callers |
 | `.github/actions/scan-dev-configs/`, `verify-npm-hardening/` | Composite actions that `security.yml` runs |
+| `.github/actions/production-branch-guard/` | Composite action that `production-branch-guard.yml` runs |
 | `workflow-templates/` | Starter workflows for the "New workflow" page, with `.properties.json` files |
 | `templates/` | Dependabot templates that repositories copy |
 | `scripts/` | Checker scripts that the self-check runs |
@@ -125,9 +130,9 @@ Keep these rules. Each one fixes a failure that happened.
    deployment workflows: deployment lives in private repositories.
 2. **Pin every third-party action by full commit SHA**, with the version in a
    trailing comment: `uses: actions/checkout@<sha> # v7.0.1`.
-3. **No tag-pinned own actions.** `security.yml` checks out this repository at
-   `job.workflow_sha` and runs the actions from `./.scify-github/...`. Do not
-   change this to `scify/.github/.github/actions/<name>@v0.1`.
+3. **No tag-pinned own actions.** `security.yml` and `production-branch-guard.yml`
+   check out this repository at `job.workflow_sha` and run the actions from
+   `./.scify-github/...`. Do not change this to `scify/.github/.github/actions/<name>@v0.1`.
 4. **No composite actions for setup in the CI workflows.** `laravel-ci.yml` and
    `node-ci.yml` share setup steps through YAML anchors (`&name` in the first
    job, `*name` in the others). A setup step changes in the first job only.

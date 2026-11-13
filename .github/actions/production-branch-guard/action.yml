@@ -1,0 +1,79 @@
+# Fails unless a pull request comes from an allowed branch of this repository.
+# The production-branch-guard.yml workflow runs it on pull requests into a
+# deploy branch, for example production. It checks out no code and only
+# compares names.
+#
+# Usage (inside a workflow; the reusable workflow passes the pull request values):
+#
+#   steps:
+#     - uses: scify/.github/.github/actions/production-branch-guard@<commit-sha> # v0.1
+#       with:
+#         allowed-branches: |
+#           main
+#           hotfix/*
+#         head-ref: ${{ github.event.pull_request.head.ref }}
+#         head-repository: ${{ github.event.pull_request.head.repo.full_name }}
+#
+# Checks:
+#   1. The pull request comes from this repository, not from a fork
+#   2. The source branch matches one of the allowed-branches globs
+
+name: Production branch guard
+description: Fails unless a pull request comes from an allowed branch of this repository
+
+inputs:
+  allowed-branches:
+    description: "Newline-separated glob patterns of source branches that may merge. `*` also matches `/`. Example: main, hotfix/*"
+    required: false
+    default: main
+  head-ref:
+    description: "The source branch of the pull request. Example: main"
+    required: true
+  head-repository:
+    description: "The repository of the source branch, as owner/name. Example: scify/my-app"
+    required: true
+  repository:
+    description: "This repository, as owner/name. A different head-repository is a fork. Example: scify/my-app"
+    required: false
+    default: ${{ github.repository }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check the source branch
+      shell: bash
+      env:
+        ALLOWED_BRANCHES: ${{ inputs.allowed-branches }}
+        HEAD_REF: ${{ inputs.head-ref }}
+        HEAD_REPO: ${{ inputs.head-repository }}
+        THIS_REPO: ${{ inputs.repository }}
+      run: |
+        if [ -z "$HEAD_REF" ] || [ -z "$HEAD_REPO" ]; then
+          echo "::error::No pull request source. Run the guard on pull_request_target or pull_request events."
+          exit 1
+        fi
+
+        # A fork can have a branch with an allowed name, for example main.
+        if [ "$HEAD_REPO" != "$THIS_REPO" ]; then
+          echo "::error::Only branches of $THIS_REPO can merge here. This pull request comes from $HEAD_REPO:$HEAD_REF."
+          exit 1
+        fi
+
+        listed=''
+        while IFS= read -r pattern || [ -n "$pattern" ]; do
+          # Remove leading and trailing spaces.
+          pattern="${pattern#"${pattern%%[![:space:]]*}"}"
+          pattern="${pattern%"${pattern##*[![:space:]]}"}"
+          [ -n "$pattern" ] || continue
+          listed="$listed $pattern"
+          # The pattern is a glob on purpose, so it is not quoted.
+          # shellcheck disable=SC2254
+          case "$HEAD_REF" in
+            $pattern)
+              echo "Source $HEAD_REPO:$HEAD_REF matches the allowed branch '$pattern'."
+              exit 0 ;;
+          esac
+        done <<< "$ALLOWED_BRANCHES"
+
+        echo "::error::The source branch $HEAD_REF is not allowed. Allowed branches:${listed:- none}."
+        exit 1

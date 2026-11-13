@@ -1,0 +1,27 @@
+# Guard for a branch that deploys, for example production.
+# The logic lives in scify/.github. Change inputs here, not the steps.
+# Guide:  https://github.com/scify/.github/blob/main/.github/workflows/README.md#production-branch-guard
+#
+# Each commented-out input shows its default. Uncomment a line only to change it.
+# The "e.g." comment shows other accepted values.
+# To change an input, also uncomment the `with:` line.
+# In the ruleset of the protected branch, require the check "guard / Production Branch Guard".
+#
+# pull_request_target runs this file from the default branch, so a pull request
+# cannot change the check that it must pass. The guard checks out no pull request code.
+name: Production Branch Guard
+
+on:
+  pull_request_target:
+    branches: [production]
+    # edited: a pull request whose base changes to production.
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    uses: scify/.github/.github/workflows/production-branch-guard.yml@v0.1
+    # with:
+    #   allowed-branches: main                        # e.g. a block with main and hotfix/* (one glob per line)
