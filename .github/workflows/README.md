@@ -595,6 +595,7 @@ merge the protected branch back into `main`.
 | `input "..." is not defined in ... reusable workflow` | The input name is misspelled, or your tag is older than the input. Check the inputs table and your `@v0.x` tag. |
 | A required check shows "Expected — Waiting for status to be reported" | Branch protection requires a check name that no longer exists, for example `ci / Node checks`. Require `ci / CI` instead. |
 | `guard / Production Branch Guard` never runs on a pull request into `production` | The caller is not on the default branch yet. `pull_request_target` runs the caller file from the default branch. Merge the caller to `main` first. |
+| `php artisan test ... --coverage --min=80` passes, but the log shows no coverage table | `artisan test` ignores its own options after an option that it does not know, for example `--testsuite=Unit`. Put `--coverage` and `--min` first: `php artisan test --coverage --min=80 --testsuite=Unit`. `vendor/bin/pest` reads them in any position. |
 | `The source branch ... is not allowed` | The pull request comes from a branch that `allowed-branches` does not list. Open the pull request from `main`, or add a glob for the branch, for example `hotfix/*`. |
 | `Codecov` fails on your own pull requests | The `CODECOV_TOKEN` secret is missing or not passed under `secrets:`. Pull requests from forks get no secrets, so there the upload failure does not fail the job. |
 | `Environment file '...' not found` (Laravel) | Your repository has no `.env.testing` and no `.env.example`, or `env-file` points to a missing file. |
