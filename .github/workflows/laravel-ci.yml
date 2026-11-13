@@ -38,7 +38,8 @@
 #           .phpstan-cache
 #           /tmp/rector
 #         test-command: vendor/bin/pest --exclude-testsuite=Browser --parallel --coverage-clover=coverage/clover.xml
-#         coverage-file: coverage/clover.xml
+#         coverage: false              # true: PCOV without Codecov (private repositories)
+#         coverage-file: coverage/clover.xml   # Codecov upload (public repositories)
 #         browser-tests: true
 #         browser-test-command: vendor/bin/pest --testsuite=Browser
 #
@@ -50,7 +51,8 @@
 #            PHPStan   when phpstan.neon or phpstan.neon.dist exists
 #            npm       `check` or `lint`, then `types` or `type-check`
 #   test   test-command, then `npm run test` when package.json defines it.
-#          Uploads coverage to Codecov when coverage-file is set.
+#          PCOV is on with coverage: true or coverage-file. Uploads coverage to
+#          Codecov when coverage-file is set.
 #   e2e    Browser tests with Playwright Chromium. Runs only with browser-tests: true.
 #   ci     One aggregate check for branch protection. It is green when no job
 #          failed or was cancelled. A skipped e2e job counts as green.
@@ -121,8 +123,12 @@ on:
         description: 'Command that runs the backend tests. Example: php artisan test --parallel, vendor/bin/pest --exclude-testsuite=Browser'
         type: string
         default: php artisan test
+      coverage:
+        description: 'Turn on PCOV for test-command without a Codecov upload, for a coverage limit such as vendor/bin/pest --coverage --min=80. coverage-file also turns on PCOV. One of: true, false'
+        type: boolean
+        default: false
       coverage-file:
-        description: 'Clover XML file that test-command writes, relative to working-directory. Setting it turns on PCOV and the Codecov upload. Example: coverage/clover.xml'
+        description: 'Clover XML file that test-command writes, relative to working-directory. Setting it turns on PCOV and the Codecov upload. Use it in public repositories. Example: coverage/clover.xml'
         type: string
         default: ''
       browser-tests:
@@ -167,7 +173,7 @@ jobs:
         with:
           php-version: ${{ inputs.php-version }}
           extensions: ${{ contains(inputs.database-image, 'postgres') && format('{0}, pdo_pgsql', inputs.php-extensions) || inputs.database-image != '' && format('{0}, pdo_mysql', inputs.php-extensions) || inputs.php-extensions }}
-          coverage: ${{ inputs.coverage-file != '' && 'pcov' || 'none' }}
+          coverage: ${{ (inputs.coverage || inputs.coverage-file != '') && 'pcov' || 'none' }}
           tools: composer:v2
 
       # Composer's post-autoload-dump script runs `artisan package:discover`, which

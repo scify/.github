@@ -75,7 +75,7 @@ on:
         type: string
         default: ''
       coverage-file:
-        description: 'Coverage report that test-command writes, relative to working-directory. Setting it turns on the Codecov upload. Example: coverage/lcov.info, coverage/clover.xml'
+        description: 'Coverage report that test-command writes, relative to working-directory. Setting it turns on the Codecov upload. Use it in public repositories. Example: coverage/lcov.info, coverage/clover.xml'
         type: string
         default: ''
       build-command:

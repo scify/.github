@@ -132,7 +132,11 @@ by hand. Replace `$default-branch` with `main`.
   for. When you set it, the workflow runs your command instead. The command runs
   in bash, so `&&` and quotes work.
 - **Coverage.** Setting `coverage-file` turns on the Codecov upload. Your test
-  command must write that file.
+  command must write that file. Use Codecov only in public repositories: the
+  free Codecov plan gives PR feedback to one person in private repositories,
+  and every service with access to private code adds risk. In a private Laravel
+  repository, set `coverage: true` and let the test command enforce a limit,
+  for example `vendor/bin/pest --coverage --min=80`.
 - **One required check.** The last job, `CI`, is green when no other job failed
   or was cancelled. A skipped job counts as green. In branch protection,
   require only `ci / CI`. When you add or remove jobs later, the rule stays the
@@ -235,7 +239,8 @@ dependencies, optionally Node.js and npm dependencies, and prepare `.env` and
 | `types-command` | `''` (auto-detect) | `composer analyse` |
 | `analysis-cache-paths` | `/tmp/phpstan` and `/tmp/rector_cached_files` | `.phpstan-cache` and `/tmp/rector` (one path per line; absolute, or relative to the repository root) |
 | `test-command` | `php artisan test` | `php artisan test --parallel`, `vendor/bin/pest --exclude-testsuite=Browser` |
-| `coverage-file` | `''` (no coverage) | `coverage/clover.xml` (relative to `working-directory`) |
+| `coverage` | `false` (no coverage driver, unless `coverage-file` is set) | `true` (PCOV without a Codecov upload, for `vendor/bin/pest --coverage --min=80`) |
+| `coverage-file` | `''` (no coverage) | `coverage/clover.xml` (relative to `working-directory`; public repositories only, see [The CI model](#the-ci-model)) |
 | `browser-tests` | `false` | `true` |
 | `browser-test-command` | `vendor/bin/pest --testsuite=Browser` | `php artisan dusk` |
 | `playwright-system-deps` | `false` (the runner's libraries are enough) | `true` when Chromium does not start for a missing library |
@@ -338,9 +343,9 @@ jobs:
       frontend: false
 ```
 
-Composer scripts for the checks, Pest with coverage, and browser tests. Use
-this recipe only when the repository has each of these: the Composer scripts, a
-Codecov token, and a Pest browser suite (`pestphp/pest-plugin-browser` and a
+Composer scripts for the checks, Pest with a coverage limit, and browser tests.
+Use this recipe only when the repository has each of these: the Composer
+scripts and a Pest browser suite (`pestphp/pest-plugin-browser` and a
 `Browser` test suite). Leave `lint-command` empty: auto-detection runs Pint,
 Rector and `npm run check`. Do not use `composer lint:check` there: it includes
 `analyse`, so PHPStan runs twice:
@@ -349,15 +354,13 @@ Rector and `npm run check`. Do not use `composer lint:check` there: it includes
 jobs:
   ci:
     uses: scify/.github/.github/workflows/laravel-ci.yml@v0.1
-    secrets:
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     with:
       types-command: composer analyse
       analysis-cache-paths: |
         .phpstan-cache
         /tmp/rector
-      test-command: vendor/bin/pest --exclude-testsuite=Browser --parallel --coverage-clover=coverage/clover.xml
-      coverage-file: coverage/clover.xml
+      test-command: vendor/bin/pest --exclude-testsuite=Browser --parallel --coverage --min=80
+      coverage: true
       browser-tests: true
 ```
 
@@ -393,7 +396,7 @@ Every job installs Node.js and runs `npm ci`. Every command runs inside
 | `lint-command` | `''` (auto-detect) | `npm run lint -- --max-warnings=0` |
 | `types-command` | `''` (auto-detect) | `npx tsc --noEmit`, `npx vue-tsc --noEmit` |
 | `test-command` | `''` (auto-detect) | `npx vitest run --coverage --coverage.reporter=lcov` |
-| `coverage-file` | `''` (no coverage) | `coverage/lcov.info`, relative to `working-directory` |
+| `coverage-file` | `''` (no coverage) | `coverage/lcov.info`, relative to `working-directory` (public repositories only, see [The CI model](#the-ci-model)) |
 | `build-command` | `npm run build` | `npm run build -- --mode staging` |
 | `browser-tests` | `false` | `true` |
 | `browser-test-command` | `npx playwright test` | `npm run test:e2e` |
