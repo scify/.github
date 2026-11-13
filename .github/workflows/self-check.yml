@@ -294,7 +294,10 @@ jobs:
       frontend: false
       lint-command: vendor/bin/pint --test && php artisan about --only=environment
       types-command: php -l app/Models/User.php
-      test-command: php artisan test --testsuite=Unit
+      # coverage: true must give a coverage driver without coverage-file.
+      # Without a driver, --coverage fails even with --min=0.
+      coverage: true
+      test-command: php artisan test --testsuite=Unit --coverage --min=0
 
   # The fixture tests use SQLite, so these jobs prove the service with migrations
   # and `db:show --json`: grep fails the job when the server, its version or the

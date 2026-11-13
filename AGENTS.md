@@ -98,6 +98,10 @@ these names for these jobs:
 `lint:fix` must run every fixer whose check `lint:check` runs. Then
 `lint:check` passes after `lint:fix`.
 
+Set `coverage-file` (the Codecov upload) only in public repositories. In a
+private repository, set `coverage: true` and a limit in `test-command`, for
+example `vendor/bin/pest --coverage --min=80`.
+
 In `laravel-ci.yml`, set `types-command: composer analyse`. Do not set
 `lint-command: composer lint:check`: it includes `analyse`, so PHPStan runs
 twice. Leave `lint-command` empty, because auto-detection runs Pint, Rector and

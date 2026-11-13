@@ -50,8 +50,9 @@ jobs:
       #   /tmp/rector_cached_files
 
       # Tests
-      # test-command: php artisan test                # e.g. vendor/bin/pest --parallel --coverage-clover=coverage/clover.xml
-      # coverage-file: ''                             # e.g. coverage/clover.xml (turns on PCOV and the Codecov upload)
+      # test-command: php artisan test                # e.g. vendor/bin/pest --parallel --coverage --min=80
+      # coverage: false                               # true: PCOV for a coverage limit, without Codecov
+      # coverage-file: ''                             # e.g. coverage/clover.xml (PCOV + Codecov upload; public repositories only)
       # browser-tests: false                          # true: run the Playwright job
       # browser-test-command: vendor/bin/pest --testsuite=Browser
       # playwright-system-deps: false                 # true: apt-install Chromium's libraries and fonts
