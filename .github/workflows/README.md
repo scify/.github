@@ -1,14 +1,15 @@
 # Reusable workflows
 
-This folder holds the reusable workflows that SciFY repositories call for CI and
-security checks. This guide explains how to call each workflow from your
-application, which inputs it accepts, and how to solve common problems.
+This folder holds the reusable workflows that SciFY repositories call for CI,
+security checks and branch guards. This guide explains how to call each workflow
+from your application, which inputs it accepts, and how to solve common problems.
 
 | Workflow | Use it for |
 | --- | --- |
 | [`laravel-ci.yml`](#laravel-ci) | CI for Laravel applications |
 | [`node-ci.yml`](#node-ci) | CI for npm-only applications (Vue, React, TypeScript SPAs) |
 | [`security.yml`](#security) | Secret, dev tool config, npm hardening and dependency audit checks for any repository |
+| [`production-branch-guard.yml`](#production-branch-guard) | Pull requests into a deploy branch, for example `production`, only from allowed branches such as `main` |
 
 Each workflow file also starts with a comment block that shows a full example call.
 `self-check.yml` is the CI of this repository. Do not call it.
@@ -50,6 +51,7 @@ more rules. SciFY developers with the `scify-devops` Claude Code plugin can run
 - [Laravel CI](#laravel-ci)
 - [Node CI](#node-ci)
 - [Security](#security)
+- [Production branch guard](#production-branch-guard)
 - [Troubleshooting](#troubleshooting)
 
 ## How a call works
@@ -520,12 +522,77 @@ jobs:
         .claude/hooks/*.sh
 ```
 
+## Production branch guard
+
+`production-branch-guard.yml` protects a branch that deploys, for example
+`production`. It fails a pull request into that branch unless the pull request
+comes from an allowed branch of the same repository. A pull request from a fork
+always fails, also when its branch is named `main`.
+
+| Job | What it checks |
+| --- | --- |
+| `Production Branch Guard` | The source branch of the pull request matches one of the `allowed-branches` globs, and the source repository is the repository of the pull request |
+
+| Input | Default | Example values |
+| --- | --- | --- |
+| `allowed-branches` | `main` | `main` and `hotfix/*`, one glob per line. `*` also matches `/`. Each line is one glob; `\|` is not an "or" |
+
+The guard is useful only with a branch ruleset. In the ruleset of the protected
+branch:
+
+1. Require a pull request before merging.
+2. Require the status checks `ci / CI` and `guard / Production Branch Guard`.
+3. Block force pushes and deletion.
+
+Without the ruleset, a person can push to the branch directly, and the guard
+never runs.
+
+The caller uses `pull_request_target`, not `pull_request`. GitHub runs the
+caller file from the default branch, so a pull request cannot change the check
+that it must pass. The guard checks out only `scify/.github` and compares
+names. Do not add a checkout of the pull request code to the caller.
+
+```yaml
+# .github/workflows/production-branch-guard.yml in your repository
+name: Production Branch Guard
+
+on:
+  pull_request_target:
+    branches: [production]
+    # edited: a pull request whose base changes to production.
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    uses: scify/.github/.github/workflows/production-branch-guard.yml@v0.1
+```
+
+To allow hotfix branches as well as `main`:
+
+```yaml
+jobs:
+  guard:
+    uses: scify/.github/.github/workflows/production-branch-guard.yml@v0.1
+    with:
+      allowed-branches: |
+        main
+        hotfix/*
+```
+
+A hotfix branch can bring code that `main` does not have. After the merge,
+merge the protected branch back into `main`.
+
 ## Troubleshooting
 
 | Symptom | Cause and fix |
 | --- | --- |
 | `input "..." is not defined in ... reusable workflow` | The input name is misspelled, or your tag is older than the input. Check the inputs table and your `@v0.x` tag. |
 | A required check shows "Expected — Waiting for status to be reported" | Branch protection requires a check name that no longer exists, for example `ci / Node checks`. Require `ci / CI` instead. |
+| `guard / Production Branch Guard` never runs on a pull request into `production` | The caller is not on the default branch yet. `pull_request_target` runs the caller file from the default branch. Merge the caller to `main` first. |
+| `The source branch ... is not allowed` | The pull request comes from a branch that `allowed-branches` does not list. Open the pull request from `main`, or add a glob for the branch, for example `hotfix/*`. |
 | `Codecov` fails on your own pull requests | The `CODECOV_TOKEN` secret is missing or not passed under `secrets:`. Pull requests from forks get no secrets, so there the upload failure does not fail the job. |
 | `Environment file '...' not found` (Laravel) | Your repository has no `.env.testing` and no `.env.example`, or `env-file` points to a missing file. |
 | Browser tests also run in `Backend tests` (Laravel) | Exclude the browser suite in `test-command`, for example `vendor/bin/pest --exclude-testsuite=Browser`. |

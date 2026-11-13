@@ -7,6 +7,8 @@
 #   - every workflow template .properties.json file parses
 #   - every internal `scify/.github/...@vX` reference uses the same release tag
 #   - the composite actions pass on good fixtures and fail on bad ones
+#   - production-branch-guard accepts allowed branches and rejects other branches,
+#     forks and a missing source; the reusable workflow runs on this pull request
 #   - security.yml runs on this repository (it loads its actions by job.workflow_sha),
 #     and on tests/fixtures/security (composer.lock, package-lock.json, .env template).
 #     The fixture fails unless npm audit runs on the Node.js from its .nvmrc
@@ -178,6 +180,91 @@ jobs:
             echo "::error::An action passed on a fixture that it must reject."
             exit 1
           fi
+
+  branch-guard-action:
+    name: Production branch guard action
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Guard passes main with the default
+        uses: ./.github/actions/production-branch-guard
+        with:
+          head-ref: main
+          head-repository: ${{ github.repository }}
+
+      - name: Guard passes a hotfix branch that a glob allows
+        uses: ./.github/actions/production-branch-guard
+        with:
+          allowed-branches: |
+            main
+            hotfix/*
+          head-ref: hotfix/login-500
+          head-repository: ${{ github.repository }}
+
+      - name: Guard with a branch that is not allowed
+        id: other-branch
+        continue-on-error: true
+        uses: ./.github/actions/production-branch-guard
+        with:
+          head-ref: feature/new-page
+          head-repository: ${{ github.repository }}
+
+      - name: Guard with main from a fork
+        id: fork
+        continue-on-error: true
+        uses: ./.github/actions/production-branch-guard
+        with:
+          head-ref: main
+          head-repository: someone/fork
+
+      - name: Guard with a name that only starts like the glob
+        id: near-match
+        continue-on-error: true
+        uses: ./.github/actions/production-branch-guard
+        with:
+          allowed-branches: |
+            main
+            hotfix/*
+          head-ref: hotfixes
+          head-repository: ${{ github.repository }}
+
+      - name: Guard without a pull request source
+        id: no-source
+        continue-on-error: true
+        uses: ./.github/actions/production-branch-guard
+        with:
+          head-ref: ''
+          head-repository: ''
+
+      - name: The guard rejected every bad source
+        env:
+          OTHER: ${{ steps.other-branch.outcome }}
+          FORK: ${{ steps.fork.outcome }}
+          NEAR: ${{ steps.near-match.outcome }}
+          NONE: ${{ steps.no-source.outcome }}
+        run: |
+          echo "branch that is not allowed: $OTHER"
+          echo "main from a fork: $FORK"
+          echo "near match of the glob: $NEAR"
+          echo "no pull request source: $NONE"
+          if [ "$OTHER" != failure ] || [ "$FORK" != failure ] || [ "$NEAR" != failure ] || [ "$NONE" != failure ]; then
+            echo "::error::The guard passed a source that it must reject."
+            exit 1
+          fi
+
+  # Runs the reusable workflow on this pull request, which comes from a branch of
+  # this repository. Pull requests from forks skip it: the guard rejects forks.
+  branch-guard-workflow:
+    name: Production branch guard workflow
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    uses: ./.github/workflows/production-branch-guard.yml
+    with:
+      allowed-branches: '*'
 
   security:
     name: Security workflow on this repository

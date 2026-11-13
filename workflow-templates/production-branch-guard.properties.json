@@ -1,0 +1,6 @@
+{
+    "name": "SciFY Production Branch Guard",
+    "description": "Fails a pull request into a deploy branch, for example production, unless it comes from an allowed branch of the same repository, through the shared scify/.github workflow.",
+    "iconName": "octicon git-pull-request",
+    "categories": ["Deployment"]
+}
